@@ -1,35 +1,24 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from "react-native";
 import { FontAwesome } from '@expo/vector-icons';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
 import { signOut } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { HomeScreenStyles } from '../styles/HomeScreenStyles';
-import { useFocusEffect, router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 export default function HomeScreen() {
-  const [profile, setProfile] = useState<{ 
-    firstName?: string; 
-    lastName?: string; 
-    location?: string;
-    email?: string;
-    phone?: string;
-  }>({});
-  
-  const [currentLocation, setCurrentLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const [profile, setProfile] = useState({});
+  const [currentLocation, setCurrentLocation] = useState(null);
   const [status, setStatus] = useState("Safe");
   const [activeTab, setActiveTab] = useState('home');
   const [isEditing, setIsEditing] = useState(false);
-  const [editableProfile, setEditableProfile] = useState<{
-    firstName?: string;
-    lastName?: string;
-    location?: string;
-    phone?: string;
-  }>({});
+  const [editableProfile, setEditableProfile] = useState({});
+  const mapRef = useRef(null);
+  const locationSubscription = useRef(null);
   
-  // Fetch user profile from Firestore
+  // Fetch user profile
   useFocusEffect(
     React.useCallback(() => {
       const fetchProfile = async () => {
@@ -59,7 +48,7 @@ export default function HomeScreen() {
     }, [])
   );
 
-  // Get user's current location
+  // Real-time location tracking
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -68,19 +57,49 @@ export default function HomeScreen() {
         return;
       }
 
+      // Get initial location
       let location = await Location.getCurrentPositionAsync({});
       setCurrentLocation({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
       });
+
+      // Subscribe to location updates
+      locationSubscription.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+          distanceInterval: 10
+        },
+        (newLocation) => {
+          const updatedLocation = {
+            latitude: newLocation.coords.latitude,
+            longitude: newLocation.coords.longitude
+          };
+          setCurrentLocation(updatedLocation);
+          
+          // Animate map to new location
+          mapRef.current?.animateToRegion({
+            ...updatedLocation,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }, 1000);
+        }
+      );
     })();
+
+    // Cleanup function
+    return () => {
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
   }, []);
 
-  // Handle user logout
+  // Handle logout
   const handleLogout = async () => {
     try {
       await signOut(FIREBASE_AUTH);
-      router.replace('/login');
     } catch (error) {
       console.error('Failed to logout:', error);
     }
@@ -105,14 +124,10 @@ export default function HomeScreen() {
     }
   };
 
-  // Navigation functions
-  const navigateToSOS = () => router.push('/sos-alert');
-  const navigateToReport = () => router.push('/report-incident');
-
   // Render home content
   const renderHomeContent = () => (
     <>
-      {/* 1. Status Display */}
+      {/* Status Display */}
       <View style={styles.statusContainer}>
         <Text style={styles.statusText}>{status}</Text>
         <View style={styles.shieldContainer}>
@@ -120,10 +135,11 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* 2. Map Area */}
+      {/* Map Area */}
       <View style={styles.mapContainer}>
         {currentLocation ? (
           <MapView
+            ref={mapRef}
             style={styles.map}
             initialRegion={{
               latitude: currentLocation.latitude,
@@ -147,16 +163,14 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* 3 & 4. Alert Buttons Container */}
+      {/* Alert Buttons */}
       <View style={styles.buttonsContainer}>
-        {/* 4. Report Button */}
-        <TouchableOpacity style={[styles.actionButton, styles.reportButton]} onPress={navigateToReport}>
+        <TouchableOpacity style={[styles.actionButton, styles.reportButton]}>
           <FontAwesome name="exclamation-circle" size={32} color="white" />
           <Text style={styles.buttonText}>Report</Text>
         </TouchableOpacity>
 
-        {/* 3. SOS Button */}
-        <TouchableOpacity style={[styles.actionButton, styles.sosButton]} onPress={navigateToSOS}>
+        <TouchableOpacity style={[styles.actionButton, styles.sosButton]}>
           <FontAwesome name="exclamation-triangle" size={32} color="white" />
           <Text style={styles.buttonText}>SOS Alert</Text>
         </TouchableOpacity>
@@ -264,13 +278,12 @@ export default function HomeScreen() {
     </ScrollView>
   );
 
-  // Render the screen
   return (
     <View style={styles.container}>
       {/* Main Content Area */}
       {activeTab === 'home' ? renderHomeContent() : renderProfileContent()}
 
-      {/* 5 & 6. Bottom Navigation */}
+      {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
         <TouchableOpacity 
           style={[styles.navButton, activeTab === 'home' && styles.activeNavButton]} 
@@ -293,12 +306,15 @@ export default function HomeScreen() {
             color={activeTab === 'profile' ? "#2196F3" : "#333"} 
           />
         </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.navButton}>
+          <FontAwesome name="bars" size={24} color="#333" />
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-// Updated styles for the revised layout
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -326,17 +342,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     margin: 10,
-    //add border radius
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: 'white',
-    //add drop shadow
-    shadowColor:'#266691',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 70,
-    elevation: 3,
-
   },
   map: {
     width: '100%',
