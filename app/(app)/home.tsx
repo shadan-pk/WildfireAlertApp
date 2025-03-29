@@ -293,13 +293,6 @@ export default function HomeScreen() {
             color={activeTab === 'profile' ? "#2196F3" : "#333"} 
           />
         </TouchableOpacity>
-        
-        {/* <TouchableOpacity 
-          style={styles.navButton} 
-          onPress={navigateToMenu}
-        >
-          <FontAwesome name="bars" size={24} color="#333" />
-        </TouchableOpacity> */}
       </View>
     </View>
   );
@@ -333,6 +326,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     margin: 10,
+    //add border radius
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: 'white',
+    //add drop shadow
+    shadowColor:'#266691',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 70,
+    elevation: 3,
+
   },
   map: {
     width: '100%',
