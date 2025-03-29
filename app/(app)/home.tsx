@@ -1,20 +1,33 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from "react-native";
 import { FontAwesome } from '@expo/vector-icons';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { HomeScreenStyles } from '../styles/HomeScreenStyles';
-import { useFocusEffect, router, useSegments } from "expo-router";
+import { useFocusEffect, router } from "expo-router";
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 
 export default function HomeScreen() {
-  const [profile, setProfile] = useState<{ firstName?: string; lastName?: string; location?: string }>({});
+  const [profile, setProfile] = useState<{ 
+    firstName?: string; 
+    lastName?: string; 
+    location?: string;
+    email?: string;
+    phone?: string;
+  }>({});
+  
   const [currentLocation, setCurrentLocation] = useState<{latitude: number, longitude: number} | null>(null);
   const [status, setStatus] = useState("Safe");
-  const segments = useSegments();
-  const isProfilePage = segments[0] === 'ProfileScreen';
+  const [activeTab, setActiveTab] = useState('home');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableProfile, setEditableProfile] = useState<{
+    firstName?: string;
+    lastName?: string;
+    location?: string;
+    phone?: string;
+  }>({});
   
   // Fetch user profile from Firestore
   useFocusEffect(
@@ -26,11 +39,15 @@ export default function HomeScreen() {
             const userDoc = await getDoc(doc(FIREBASE_DB, "users", currentUser.uid));
             if (userDoc.exists()) {
               const data = userDoc.data();
-              setProfile({
+              const profileData = {
                 firstName: data.firstName,
                 lastName: data.lastName,
                 location: data.address,
-              });
+                email: currentUser.email,
+                phone: data.phone || '',
+              };
+              setProfile(profileData);
+              setEditableProfile(profileData);
             }
           } catch (error) {
             console.error("Error fetching user profile:", error);
@@ -69,16 +86,32 @@ export default function HomeScreen() {
     }
   };
 
+  // Save profile changes
+  const saveProfileChanges = async () => {
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (currentUser) {
+      try {
+        await updateDoc(doc(FIREBASE_DB, "users", currentUser.uid), {
+          firstName: editableProfile.firstName,
+          lastName: editableProfile.lastName,
+          address: editableProfile.location,
+          phone: editableProfile.phone,
+        });
+        setProfile(editableProfile);
+        setIsEditing(false);
+      } catch (error) {
+        console.error("Error updating profile:", error);
+      }
+    }
+  };
+
   // Navigation functions
-  const navigateToProfile = () => router.push('/ProfileScreen');
-  const navigateToHome = () => router.push('/');
   const navigateToSOS = () => router.push('/sos-alert');
   const navigateToReport = () => router.push('/report-incident');
-  const navigateToMenu = () => router.push('/menu');
 
-  // Render the screen
-  return (
-    <View style={styles.container}>
+  // Render home content
+  const renderHomeContent = () => (
+    <>
       {/* 1. Status Display */}
       <View style={styles.statusContainer}>
         <Text style={styles.statusText}>{status}</Text>
@@ -128,22 +161,151 @@ export default function HomeScreen() {
           <Text style={styles.buttonText}>SOS Alert</Text>
         </TouchableOpacity>
       </View>
+    </>
+  );
+
+  // Render profile content
+  const renderProfileContent = () => (
+    <ScrollView style={styles.profileContainer}>
+      <View style={styles.profileHeader}>
+        <FontAwesome name="user-circle" size={80} color="#333" />
+        <Text style={styles.profileName}>
+          {profile.firstName} {profile.lastName}
+        </Text>
+      </View>
+
+      {isEditing ? (
+        <View style={styles.profileForm}>
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>First Name</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editableProfile.firstName}
+              onChangeText={(text) => setEditableProfile({...editableProfile, firstName: text})}
+            />
+          </View>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Last Name</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editableProfile.lastName}
+              onChangeText={(text) => setEditableProfile({...editableProfile, lastName: text})}
+            />
+          </View>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Address</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editableProfile.location}
+              onChangeText={(text) => setEditableProfile({...editableProfile, location: text})}
+            />
+          </View>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>Phone</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editableProfile.phone}
+              onChangeText={(text) => setEditableProfile({...editableProfile, phone: text})}
+              keyboardType="phone-pad"
+            />
+          </View>
+          
+          <View style={styles.formButtonGroup}>
+            <TouchableOpacity 
+              style={[styles.formButton, styles.cancelButton]} 
+              onPress={() => setIsEditing(false)}
+            >
+              <Text style={styles.formButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.formButton, styles.saveButton]} 
+              onPress={saveProfileChanges}
+            >
+              <Text style={styles.formButtonText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.profileDetails}>
+          <View style={styles.profileInfo}>
+            <FontAwesome name="envelope" size={18} color="#666" style={styles.infoIcon} />
+            <Text style={styles.infoText}>{profile.email}</Text>
+          </View>
+          
+          <View style={styles.profileInfo}>
+            <FontAwesome name="map-marker" size={18} color="#666" style={styles.infoIcon} />
+            <Text style={styles.infoText}>{profile.location || "No address set"}</Text>
+          </View>
+          
+          <View style={styles.profileInfo}>
+            <FontAwesome name="phone" size={18} color="#666" style={styles.infoIcon} />
+            <Text style={styles.infoText}>{profile.phone || "No phone number set"}</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.editProfileButton} 
+            onPress={() => setIsEditing(true)}
+          >
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.logoutButton} 
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </ScrollView>
+  );
+
+  // Render the screen
+  return (
+    <View style={styles.container}>
+      {/* Main Content Area */}
+      {activeTab === 'home' ? renderHomeContent() : renderProfileContent()}
 
       {/* 5 & 6. Bottom Navigation */}
       <View style={styles.bottomNavigation}>
-        <TouchableOpacity style={styles.navButton} onPress={navigateToHome}>
-          <FontAwesome name="home" size={24} color="#333" />
+        <TouchableOpacity 
+          style={[styles.navButton, activeTab === 'home' && styles.activeNavButton]} 
+          onPress={() => setActiveTab('home')}
+        >
+          <FontAwesome 
+            name="home" 
+            size={24} 
+            color={activeTab === 'home' ? "#2196F3" : "#333"} 
+          />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.navButton} onPress={navigateToProfile}>
-          <FontAwesome name="user" size={24} color="#333" />
+        <TouchableOpacity 
+          style={[styles.navButton, activeTab === 'profile' && styles.activeNavButton]} 
+          onPress={() => setActiveTab('profile')}
+        >
+          <FontAwesome 
+            name="user" 
+            size={24} 
+            color={activeTab === 'profile' ? "#2196F3" : "#333"} 
+          />
         </TouchableOpacity>
+        
+        {/* <TouchableOpacity 
+          style={styles.navButton} 
+          onPress={navigateToMenu}
+        >
+          <FontAwesome name="bars" size={24} color="#333" />
+        </TouchableOpacity> */}
       </View>
     </View>
   );
 }
 
-// New styles for the updated layout
+// Updated styles for the revised layout
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -219,5 +381,106 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 10,
+  },
+  activeNavButton: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#2196F3',
+  },
+  profileContainer: {
+    flex: 1,
+    padding: 15,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+  profileDetails: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    marginTop: 20,
+  },
+  profileInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  infoIcon: {
+    marginRight: 15,
+    width: 20,
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  editProfileButton: {
+    backgroundColor: '#2196F3',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  editButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: '#FF5252',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  logoutButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  profileForm: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    marginTop: 20,
+  },
+  formGroup: {
+    marginBottom: 15,
+  },
+  formLabel: {
+    fontSize: 16,
+    marginBottom: 5,
+    color: '#333',
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 5,
+    padding: 10,
+    fontSize: 16,
+  },
+  formButtonGroup: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  formButton: {
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#9e9e9e',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+  },
+  formButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
