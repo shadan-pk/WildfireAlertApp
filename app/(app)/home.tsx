@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert } from "react-native";
 import { FontAwesome } from '@expo/vector-icons';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc, collection } from "firebase/firestore";
 import { useFocusEffect } from "expo-router";
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -15,6 +15,7 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('home');
   const [isEditing, setIsEditing] = useState(false);
   const [editableProfile, setEditableProfile] = useState({});
+  const [locationUpdateEnabled, setLocationUpdateEnabled] = useState(true);
   const mapRef = useRef(null);
   const locationSubscription = useRef(null);
   
@@ -48,6 +49,38 @@ export default function HomeScreen() {
     }, [])
   );
 
+  // Function to update user location in Firestore
+  const updateUserLocationInFirestore = async (location) => {
+    if (!locationUpdateEnabled) return;
+    
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (currentUser && currentUser.email) {
+      try {
+        // Use user email as the document ID in the userLocation collection
+        await setDoc(doc(FIREBASE_DB, "userLocation", currentUser.email), {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timestamp: new Date()
+        });
+        console.log("User location updated in Firestore");
+      } catch (error) {
+        console.error("Error updating user location in Firestore:", error);
+        
+        if (error.toString().includes("Missing or insufficient permissions")) {
+          // Disable further location updates to prevent repeated errors
+          setLocationUpdateEnabled(false);
+          
+          // Show a friendly alert to the user
+          Alert.alert(
+            "Location Updates Disabled",
+            "We couldn't save your location due to permission settings. Your app will continue to work, but location tracking is disabled.",
+            [{ text: "OK" }]
+          );
+        }
+      }
+    }
+  };
+
   // Real-time location tracking
   useEffect(() => {
     (async () => {
@@ -59,10 +92,15 @@ export default function HomeScreen() {
 
       // Get initial location
       let location = await Location.getCurrentPositionAsync({});
-      setCurrentLocation({
+      const initialLocation = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
-      });
+      };
+      
+      setCurrentLocation(initialLocation);
+      
+      // Store the initial location in Firestore
+      await updateUserLocationInFirestore(initialLocation);
 
       // Subscribe to location updates
       locationSubscription.current = await Location.watchPositionAsync(
@@ -77,6 +115,11 @@ export default function HomeScreen() {
             longitude: newLocation.coords.longitude
           };
           setCurrentLocation(updatedLocation);
+          
+          // Update location in Firestore only if enabled
+          if (locationUpdateEnabled) {
+            updateUserLocationInFirestore(updatedLocation);
+          }
           
           // Animate map to new location
           mapRef.current?.animateToRegion({
@@ -94,7 +137,7 @@ export default function HomeScreen() {
         locationSubscription.current.remove();
       }
     };
-  }, []);
+  }, [locationUpdateEnabled]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -162,6 +205,14 @@ export default function HomeScreen() {
           </View>
         )}
       </View>
+
+      {/* Location Tracking Status */}
+      {!locationUpdateEnabled && (
+        <View style={styles.warningBanner}>
+          <FontAwesome name="exclamation-circle" size={16} color="#FFA000" />
+          <Text style={styles.warningText}>Location tracking is disabled due to permission settings</Text>
+        </View>
+      )}
 
       {/* Alert Buttons */}
       <View style={styles.buttonsContainer}>
