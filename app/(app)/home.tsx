@@ -48,6 +48,44 @@ export default function HomeScreen() {
     }, [])
   );
 
+  // Function to update location to Firestore and server
+  const updateLocationToServer = async (location) => {
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (!currentUser) return;
+    
+    try {
+      // Update to Firestore directly from client
+      await updateDoc(doc(FIREBASE_DB, "users", currentUser.uid), {
+        location: { 
+          lat: location.latitude, 
+          lon: location.longitude 
+        },
+        updatedAt: serverTimestamp()
+      });
+      
+      // Also send to prediction server
+      const serverResponse = await fetch('http://your-prediction-server-url/api/update-location', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uid: currentUser.uid,
+          lat: location.latitude,
+          lon: location.longitude
+        }),
+      });
+      
+      if (!serverResponse.ok) {
+        throw new Error('Failed to update location to server');
+      }
+      
+      console.log('Location updated successfully to server and Firestore');
+    } catch (error) {
+      console.error('Error updating location:', error);
+    }
+  };
+
   // Real-time location tracking
   useEffect(() => {
     (async () => {
@@ -59,10 +97,14 @@ export default function HomeScreen() {
 
       // Get initial location
       let location = await Location.getCurrentPositionAsync({});
-      setCurrentLocation({
+      const initialLocation = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
-      });
+      };
+      setCurrentLocation(initialLocation);
+      
+      // Send initial location to server
+      updateLocationToServer(initialLocation);
 
       // Subscribe to location updates
       locationSubscription.current = await Location.watchPositionAsync(
@@ -77,6 +119,9 @@ export default function HomeScreen() {
             longitude: newLocation.coords.longitude
           };
           setCurrentLocation(updatedLocation);
+          
+          // Update server with new location
+          updateLocationToServer(updatedLocation);
           
           // Animate map to new location
           mapRef.current?.animateToRegion({
