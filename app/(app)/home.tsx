@@ -6,18 +6,18 @@ import { signOut } from 'firebase/auth';
 import { doc, getDoc, updateDoc, setDoc, collection } from "firebase/firestore";
 import { useFocusEffect } from "expo-router";
 import MapView, { Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
+import { useLocationTracking } from '../../hooks/useLocationTracking';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 export default function HomeScreen() {
+  const { currentLocation, locationUpdateEnabled } = useLocationTracking();
+  const { updateOnlineStatus } = useOnlineStatus();
   const [profile, setProfile] = useState({});
-  const [currentLocation, setCurrentLocation] = useState(null);
   const [status, setStatus] = useState("Safe");
   const [activeTab, setActiveTab] = useState('home');
   const [isEditing, setIsEditing] = useState(false);
   const [editableProfile, setEditableProfile] = useState({});
-  const [locationUpdateEnabled, setLocationUpdateEnabled] = useState(true);
   const mapRef = useRef(null);
-  const locationSubscription = useRef(null);
   
   // Fetch user profile
   useFocusEffect(
@@ -38,6 +38,7 @@ export default function HomeScreen() {
               };
               setProfile(profileData);
               setEditableProfile(profileData);
+              
             }
           } catch (error) {
             console.error("Error fetching user profile:", error);
@@ -49,99 +50,10 @@ export default function HomeScreen() {
     }, [])
   );
 
-  // Function to update user location in Firestore
-  const updateUserLocationInFirestore = async (location) => {
-    if (!locationUpdateEnabled) return;
-    
-    const currentUser = FIREBASE_AUTH.currentUser;
-    if (currentUser && currentUser.email) {
-      try {
-        // Use user email as the document ID in the userLocation collection
-        await setDoc(doc(FIREBASE_DB, "userLocation", currentUser.email), {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          timestamp: new Date()
-        });
-        console.log("User location updated in Firestore");
-      } catch (error) {
-        console.error("Error updating user location in Firestore:", error);
-        
-        if (error.toString().includes("Missing or insufficient permissions")) {
-          // Disable further location updates to prevent repeated errors
-          setLocationUpdateEnabled(false);
-          
-          // Show a friendly alert to the user
-          Alert.alert(
-            "Location Updates Disabled",
-            "We couldn't save your location due to permission settings. Your app will continue to work, but location tracking is disabled.",
-            [{ text: "OK" }]
-          );
-        }
-      }
-    }
-  };
-
-  // Real-time location tracking
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.error('Permission to access location was denied');
-        return;
-      }
-
-      // Get initial location
-      let location = await Location.getCurrentPositionAsync({});
-      const initialLocation = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      };
-      
-      setCurrentLocation(initialLocation);
-      
-      // Store the initial location in Firestore
-      await updateUserLocationInFirestore(initialLocation);
-
-      // Subscribe to location updates
-      locationSubscription.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000,
-          distanceInterval: 10
-        },
-        (newLocation) => {
-          const updatedLocation = {
-            latitude: newLocation.coords.latitude,
-            longitude: newLocation.coords.longitude
-          };
-          setCurrentLocation(updatedLocation);
-          
-          // Update location in Firestore only if enabled
-          if (locationUpdateEnabled) {
-            updateUserLocationInFirestore(updatedLocation);
-          }
-          
-          // Animate map to new location
-          mapRef.current?.animateToRegion({
-            ...updatedLocation,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }, 1000);
-        }
-      );
-    })();
-
-    // Cleanup function
-    return () => {
-      if (locationSubscription.current) {
-        locationSubscription.current.remove();
-      }
-    };
-  }, [locationUpdateEnabled]);
-
   // Handle logout
   const handleLogout = async () => {
     try {
+      await updateOnlineStatus(false);
       await signOut(FIREBASE_AUTH);
     } catch (error) {
       console.error('Failed to logout:', error);
