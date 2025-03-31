@@ -4,7 +4,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
 import { signOut } from 'firebase/auth';
 import { doc, getDoc, updateDoc, setDoc, collection } from "firebase/firestore";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import MapView, { Marker } from 'react-native-maps';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -128,14 +128,20 @@ export default function HomeScreen() {
 
       {/* Alert Buttons */}
       <View style={styles.buttonsContainer}>
-        <TouchableOpacity style={[styles.actionButton, styles.reportButton]}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.reportButton]}
+          onPress={() => router.push('/(app)/report')}
+        >
           <FontAwesome name="exclamation-circle" size={32} color="white" />
           <Text style={styles.buttonText}>Report</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, styles.sosButton]}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.sosButton]}
+          onPress={() => router.push('/(app)/sos')}
+        >
           <FontAwesome name="exclamation-triangle" size={32} color="white" />
-          <Text style={styles.buttonText}>SOS Alert</Text>
+          <Text style={styles.buttonText}>SOS</Text>
         </TouchableOpacity>
       </View>
     </>
