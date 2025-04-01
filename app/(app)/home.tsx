@@ -175,16 +175,20 @@ export default function HomeScreen() {
         <View style={styles.mapContainer}>
           {currentLocation ? (
             <MapView
-            ref={mapRef}
-            style={styles.map}
-            initialRegion={{
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-            customMapStyle={mapStyle}
-          >
+              ref={mapRef}
+              style={styles.map}
+              camera={{
+                center: {
+                  latitude: currentLocation.latitude,
+                  longitude: currentLocation.longitude,
+                },
+                pitch: 85, // This creates the 3D effect (0-60 degrees)
+                heading: 0, // Camera direction (0 is north)
+                altitude: 1000, // Optional: altitude in meters
+                zoom: 18, // Zoom level
+              }}
+              customMapStyle={mapStyle}
+            >
               <Marker
                 coordinate={{
                   latitude: currentLocation.latitude,
@@ -363,132 +367,65 @@ export default function HomeScreen() {
 
 // Dark map style
 const mapStyle = [
-  // General background (geometry)
   {
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#1C2526" } // Slightly darker, cooler-toned background (dark charcoal with a blue tint)
-    ]
+    "stylers": [{"color": "#1A1A1A"}] // Deep black background
   },
-
-  // Labels: Icons (keep them off for a cleaner look)
   {
     "elementType": "labels.icon",
-    "stylers": [
-      { "visibility": "off" }
-    ]
+    "stylers": [{"visibility": "off"}] // Icons off for cleaner look
   },
-
-  // Labels: Text fill (for readability)
   {
     "elementType": "labels.text.fill",
-    "stylers": [
-      { "color": "#B0BEC5" } // Keep the light gray-blue for contrast
-    ]
+    "stylers": [{"color": "#FF5722"}] // Vibrant orange text
   },
-
-  // Labels: Text stroke (for better readability)
   {
     "elementType": "labels.text.stroke",
     "stylers": [
-      { "color": "#0F1415" }, // Darker stroke for higher contrast
-      { "weight": 2.5 }       // Slightly thicker stroke for better readability
+      {"color": "#000000"}, // Black stroke
+      {"weight": 2}         // Thicker stroke for contrast
     ]
   },
-
-  // Administrative boundaries
   {
     "featureType": "administrative",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#3A4445" } // Slightly lighter gray for boundaries
-    ]
+    "stylers": [{"color": "#ffff"}] // Bright orange boundaries
   },
-
-  // Landscape (natural areas)
   {
     "featureType": "landscape",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#252F31" } // Darker, cooler tone for landscapes
-    ]
+    "stylers": [{"color": "#212121"}] // Dark gray for landscape
   },
-
-  // Points of Interest (POIs)
   {
     "featureType": "poi",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#2F3B3D" }, // Darker slate for POIs to avoid clashing with buildings
-      { "visibility": "simplified" } // Reduce POI prominence to focus on buildings
-    ]
+    "stylers": [{"color": "#2C2C2C"}] // Slightly lighter black for POIs
   },
-
-  // Roads: Main geometry
   {
     "featureType": "road",
     "elementType": "geometry",
     "stylers": [
-      { "color": "#4A5557" }, // Slightly lighter gray for roads to stand out
-      { "weight": 1.5 }       // Keep roads thicker for visibility
+      {"color": "#FF5722"},     // Orange roads
+      {"weight": 1.5}           // Thicker roads
     ]
   },
-
-  // Roads: Stroke (outline)
   {
     "featureType": "road",
     "elementType": "geometry.stroke",
     "stylers": [
-      { "color": "#1A1F20" }, // Dark outline for roads
-      { "weight": 1 }
+      {"color": "#000000"},     // Black road outlines
+      {"weight": 1}
     ]
   },
-
-  // Water
   {
     "featureType": "water",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#1A2528" } // Darker blue-gray for water
-    ]
+    "stylers": [{"color": "#0A0A0A"}] // Very dark black water
   },
-
-  // Transit (e.g., train lines)
   {
     "featureType": "transit",
     "elementType": "geometry",
-    "stylers": [
-      { "color": "#3F4A4C" } // Muted tone for transit
-    ]
-  },
-
-  // Buildings: Make them stand out
-  {
-    "featureType": "building",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#5A6A6F" }, // Lighter blue-gray for buildings to stand out against the background
-      { "visibility": "on" }  // Ensure buildings are visible
-    ]
-  },
-
-  // Buildings: Add a subtle outline to make them pop
-  {
-    "featureType": "building",
-    "elementType": "geometry.stroke",
-    "stylers": [
-      { "color": "#2A3436" }, // Dark outline for buildings
-      { "weight": 0.5 }       // Thin stroke to avoid overpowering
-    ]
-  },
-
-  // Buildings: Fill (optional, for additional contrast)
-  {
-    "featureType": "building",
-    "elementType": "geometry.fill",
-    "stylers": [
-      { "color": "#5A6A6F" } // Match the geometry color
-    ]
+    "stylers": [{"color": "#FFB300"}] // Amber transit lines
   }
 ];
 
@@ -509,21 +446,23 @@ const styles = {
     zIndex: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 150,
-    height: 150,
+    width: 200,
+    height: 180,
+    //shadow
+    
   },
   pulsingCircle: {
     position: 'absolute',
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     alignSelf: 'center',
   },
   pulsingCircleInner: {
     position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 150,
+    height: 150,
+    borderRadius: 70,
     alignSelf: 'center',
   },
   statusContainer: {
@@ -546,20 +485,25 @@ const styles = {
     marginTop: 5,
   },
   mapWrapper: {
-    marginTop: 200, // Adjust this value to position the map below the status display
+    marginTop: 230, // Adjust this value to position the map below the status display
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
   },
   // Map styles
   mapContainer: {
-    top:70,
-    width: '100%', // Make the map container take most of the width
-    height: '100%', // Increase the height to make the map bigger
-    borderRadius: 15, // Add some border radius for a polished look
+    top: 70,
+    width: '100%', // Full width
+    height: '100%', // Full height
+    borderRadius: 15, // Rounded corners
     overflow: 'hidden',
     backgroundColor: '#1c1c1c', // Background color for loading state
+  
+    // Shadow for Android
+    elevation: 30, // Higher value for a stronger 3D effect
+    backgroundColor: '#222', // Slightly lighter than pure black for depth
   },
+  
   map: {
     width: '100%',
     height: '100%',
