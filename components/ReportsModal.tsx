@@ -99,16 +99,22 @@ export default function ReportsModal({ visible, onClose, reports, userEmail, onD
           <FontAwesome name="trash" size={20} color="#FF5252" />
         </TouchableOpacity>
       </View>
-      <View style={[
-        styles.severityBadge, 
-        { backgroundColor: getSeverityColor(item.severity) }
-      ]}>
-        <Text style={styles.severityText}>{item.severity.toUpperCase()}</Text>
-      </View>
       <Text style={styles.description}>{item.description}</Text>
-      <Text style={styles.timestamp}>
-        {new Date(item.timestamp).toLocaleDateString()}
-      </Text>
+      <View style={styles.reportContainer}>
+        <Text style={styles.timestamp}>
+          {new Date(item.timestamp).toLocaleDateString()}
+        </Text>
+        <View 
+          style={[
+            styles.severityBadge,
+            { backgroundColor: getSeverityColor(item.severity) }
+          ]}
+        >
+          <Text style={styles.severityText}>
+            {item.severity.toUpperCase()}
+          </Text>
+        </View>
+      </View>
     </View>
   );
 
@@ -150,13 +156,19 @@ export default function ReportsModal({ visible, onClose, reports, userEmail, onD
 }
 
 const styles = StyleSheet.create({
+
+  
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#121212',
+    //black color background
+    //padding: 20,
+    //borderRadius: 10,
+
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -171,55 +183,83 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
   listContainer: {
     paddingBottom: 20,
   },
   reportCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#2d2d2d',
+    borderRadius: 12,
+    marginVertical: 8,
+    marginHorizontal: 16,
     padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#404040',
   },
   reportHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#404040',
+    paddingBottom: 8,
   },
   reportNumber: {
+    color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    letterSpacing: 0.5,
   },
   deleteButton: {
     padding: 5,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 82, 82, 0.1)', // Slight red background
+  },
+  reportContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   severityBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   severityText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: '#ffffff',
     fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   description: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 10,
+    color: '#e0e0e0',
+    fontWeight: '500',
+    backgroundColor: '#333333',
+    padding: 10,
+    borderRadius: 4, 
+    marginBottom:20,    // Slight letter spacing
   },
   timestamp: {
+    color: '#e0e0e0',
     fontSize: 14,
-    color: '#999',
+    flex: 1,
+    marginRight: 10,
   },
+  
 });

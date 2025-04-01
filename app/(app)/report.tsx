@@ -118,22 +118,35 @@ export default function ReportScreen() {
       </View>
       
       <View style={styles.form}>
-        <Text style={styles.label}>Severity</Text>
-        <View style={styles.severityButtons}>
-          {['low', 'medium', 'high'].map((level) => (
-            <TouchableOpacity
-              key={level}
-              style={[
-                styles.severityButton,
-                severity === level && styles.selectedSeverity,
-                { backgroundColor: level === 'low' ? '#4CAF50' : level === 'medium' ? '#FFA000' : '#FF5252' }
-              ]}
-              onPress={() => setSeverity(level)}
-            >
-              <Text style={styles.severityText}>{level.toUpperCase()}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+      <Text style={styles.label}>Incident Severity</Text>
+          <View style={styles.severityContainer}>
+            {['low', 'medium', 'high'].map((level) => (
+              <TouchableOpacity
+                key={level}
+                style={[
+                  styles.severityButton,
+                  severity === level && styles.selectedSeverity,
+                ]}
+                onPress={() => setSeverity(level)}
+              >
+                <View style={[
+                  styles.severityDot, 
+                  { backgroundColor: level === 'low' 
+                    ? '#4CAF50' 
+                    : level === 'medium' 
+                      ? '#FFA000' 
+                      : '#FF5252' 
+                  }
+                ]} />
+                <Text style={[
+                  styles.severityText,
+                  severity === level && styles.selectedSeverityText
+                ]}>
+                  {level === 'low' ? 'Minor' : level === 'medium' ? 'Moderate' : 'Severe'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
         <Text style={styles.label}>Description</Text>
         <TextInput
@@ -168,85 +181,212 @@ export default function ReportScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#121212', // Matt black background
     padding: 20,
-    backgroundColor: '#f5f5f5',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contentContainer: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 60,
+  },
+  header: {
+    marginTop: 30,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#fff',
+  },
+  viewReportsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  viewReportsText: {
+    color: '#ccc',
+    fontSize: 11,
+    marginRight: 5,
+    // marginLeft: 5,
+  },
+  mapPreviewContainer: {
+    height: 150,
+    borderRadius: 16,
+    overflow: 'hidden',
     marginBottom: 20,
-    color: '#333',
+  },
+  mapPreview: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 10,
+  },
+  locationText: {
+    color: '#fff',
+    fontSize: 14,
   },
   form: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingTop: 10,
   },
   label: {
     fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 10,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 10,
-    marginBottom: 20,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  severityButtons: {
+  severityContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
   },
   severityButton: {
     flex: 1,
-    padding: 10,
-    marginHorizontal: 5,
-    borderRadius: 5,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
     borderColor: 'transparent',
   },
   selectedSeverity: {
-    borderColor: '#fff',
-    transform: [{ scale: 1.05 }],
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  severityDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
   },
   severityText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: '#ccc',
+    fontSize: 14,
+  },
+  selectedSeverityText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 8,
+    padding: 15,
+    color: '#fff',
+    fontSize: 16,
+    minHeight: 120,
+    textAlignVertical: 'top',
+    marginBottom: 30,
   },
   submitButton: {
-    backgroundColor: '#2196F3',
-    padding: 15,
-    borderRadius: 5,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF5252',
+    borderRadius: 8,
+    paddingVertical: 16,
+  },
+  submittingButton: {
+    backgroundColor: '#8B0000',
+  },
+  submitIcon: {
+    marginRight: 10,
   },
   submitButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold',
   },
-  header: {
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    // minHeight: '100',
+    // maxHeight: '100',
+    padding: 20,
+  },
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
   },
-  viewReportsButton: {
-    backgroundColor: '#666',
-    padding: 8,
-    borderRadius: 5,
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
   },
-  viewReportsText: {
-    color: 'white',
+  noReportsText: {
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 30,
+  },
+  reportItem: {
+    backgroundColor: '#252525',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  severityIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  reportTimestamp: {
+    color: '#999',
+    fontSize: 12,
+  },
+  reportDescription: {
+    color: '#fff',
     fontSize: 14,
+    lineHeight: 20,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 10,
+    padding: 5,
+  },
+  deleteText: {
+    color: '#FF5252',
+    fontSize: 14,
+    marginLeft: 5,
   },
 });
