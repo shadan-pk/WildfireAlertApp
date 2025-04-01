@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert } from "react-native";
-import { FontAwesome } from '@expo/vector-icons';
-import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
-import { signOut } from 'firebase/auth';
-import { doc, getDoc, updateDoc, setDoc, collection } from "firebase/firestore";
-import { router, useFocusEffect } from "expo-router";
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Animated, Easing } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { FontAwesome5 } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
+import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { router } from 'expo-router';
 
 export default function HomeScreen() {
   const { currentLocation, locationUpdateEnabled } = useLocationTracking();
@@ -18,6 +20,33 @@ export default function HomeScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editableProfile, setEditableProfile] = useState({});
   const mapRef = useRef(null);
+  
+  // Animation for pulsing effect
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  
+  // Start pulsing animation
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1000,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        })
+      ])
+    );
+    
+    pulse.start();
+    
+    return () => pulse.stop();
+  }, [pulseAnim]);
   
   // Fetch user profile
   useFocusEffect(
@@ -38,7 +67,6 @@ export default function HomeScreen() {
               };
               setProfile(profileData);
               setEditableProfile(profileData);
-              
             }
           } catch (error) {
             console.error("Error fetching user profile:", error);
@@ -79,14 +107,66 @@ export default function HomeScreen() {
     }
   };
 
+  // Add useEffect to listen for safety status changes
+  useEffect(() => {
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (!currentUser?.email) return;
+
+    // Set up real-time listener for safety status
+    const unsubscribe = onSnapshot(
+      doc(FIREBASE_DB, "userLocation", currentUser.email, "situation", "SafeOrNot"),
+      (doc) => {
+        if (doc.exists()) {
+          const isSafe = doc.data().safe;
+          setStatus(isSafe ? "Safe" : "Unsafe");
+        }
+      },
+      (error) => {
+        console.error("Error fetching safety status:", error);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
+
   // Render home content
   const renderHomeContent = () => (
     <>
-      {/* Status Display */}
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusText}>{status}</Text>
-        <View style={styles.shieldContainer}>
-          <FontAwesome name="shield" size={24} color={status === "Safe" ? "#4CAF50" : "#FF5252"} />
+      {/* Status Display - New Pulsing Design */}
+      <View style={styles.statusWrapper}>
+        <Animated.View 
+          style={[
+            styles.pulsingCircle,
+            { 
+              transform: [{ scale: pulseAnim }],
+              backgroundColor: status === "Safe" ? 'rgba(67, 160, 71, 0.2)' : 'rgba(255, 82, 82, 0.2)',
+            }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.pulsingCircleInner,
+            { 
+              transform: [{ scale: pulseAnim }],
+              backgroundColor: status === "Safe" ? 'rgba(67, 160, 71, 0.4)' : 'rgba(255, 82, 82, 0.4)',
+            }
+          ]}
+        />
+        <View style={styles.statusContainer}>
+          <View style={[
+            styles.shieldContainer,
+            { backgroundColor: status === "Safe" ? '#43A047' : '#FF5252' }
+          ]}>
+            <FontAwesome5
+              name={status === "Safe" ? "shield-alt" : "fire-alt"} 
+              size={32} 
+              color="#fff" 
+            />
+          </View>
+          <Text style={styles.statusText}>
+            {status}
+          </Text>
         </View>
       </View>
 
@@ -102,6 +182,7 @@ export default function HomeScreen() {
               latitudeDelta: 0.0922,
               longitudeDelta: 0.0421,
             }}
+            customMapStyle={mapStyle}
           >
             <Marker
               coordinate={{
@@ -113,37 +194,18 @@ export default function HomeScreen() {
           </MapView>
         ) : (
           <View style={styles.loadingMap}>
-            <Text>Loading map...</Text>
+            <Text style={styles.loadingText}>Loading map...</Text>
           </View>
         )}
       </View>
 
-      {/* Location Tracking Status */}
-      {!locationUpdateEnabled && (
-        <View style={styles.warningBanner}>
-          <FontAwesome name="exclamation-circle" size={16} color="#FFA000" />
-          <Text style={styles.warningText}>Location tracking is disabled due to permission settings</Text>
-        </View>
-      )}
-
-      {/* Alert Buttons */}
-      <View style={styles.buttonsContainer}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.reportButton]}
-          onPress={() => router.push('/(app)/report')}
-        >
-          <FontAwesome name="exclamation-circle" size={32} color="white" />
-          <Text style={styles.buttonText}>Report</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.sosButton]}
-          onPress={() => router.push('/(app)/sos')}
-        >
-          <FontAwesome name="exclamation-triangle" size={32} color="white" />
-          <Text style={styles.buttonText}>SOS</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Report Button */}
+      <TouchableOpacity 
+        style={styles.reportButton}
+        onPress={() => router.push('/(app)/report')}
+      >
+        <FontAwesome5 name="exclamation-circle" size={24} color="#fff" />
+      </TouchableOpacity>
     </>
   );
 
@@ -151,7 +213,7 @@ export default function HomeScreen() {
   const renderProfileContent = () => (
     <ScrollView style={styles.profileContainer}>
       <View style={styles.profileHeader}>
-        <FontAwesome name="user-circle" size={80} color="#333" />
+        <FontAwesome5 name="user-circle" size={80} color="#f0f0f0" />
         <Text style={styles.profileName}>
           {profile.firstName} {profile.lastName}
         </Text>
@@ -165,6 +227,7 @@ export default function HomeScreen() {
               style={styles.formInput}
               value={editableProfile.firstName}
               onChangeText={(text) => setEditableProfile({...editableProfile, firstName: text})}
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -174,6 +237,7 @@ export default function HomeScreen() {
               style={styles.formInput}
               value={editableProfile.lastName}
               onChangeText={(text) => setEditableProfile({...editableProfile, lastName: text})}
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -183,6 +247,7 @@ export default function HomeScreen() {
               style={styles.formInput}
               value={editableProfile.location}
               onChangeText={(text) => setEditableProfile({...editableProfile, location: text})}
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -193,6 +258,7 @@ export default function HomeScreen() {
               value={editableProfile.phone}
               onChangeText={(text) => setEditableProfile({...editableProfile, phone: text})}
               keyboardType="phone-pad"
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -215,17 +281,17 @@ export default function HomeScreen() {
       ) : (
         <View style={styles.profileDetails}>
           <View style={styles.profileInfo}>
-            <FontAwesome name="envelope" size={18} color="#666" style={styles.infoIcon} />
+            <FontAwesome5 name="envelope" size={18} color="#999" style={styles.infoIcon} />
             <Text style={styles.infoText}>{profile.email}</Text>
           </View>
           
           <View style={styles.profileInfo}>
-            <FontAwesome name="map-marker" size={18} color="#666" style={styles.infoIcon} />
+            <FontAwesome5 name="map-marker-alt" size={18} color="#999" style={styles.infoIcon} />
             <Text style={styles.infoText}>{profile.location || "No address set"}</Text>
           </View>
           
           <View style={styles.profileInfo}>
-            <FontAwesome name="phone" size={18} color="#666" style={styles.infoIcon} />
+            <FontAwesome5 name="phone" size={18} color="#999" style={styles.infoIcon} />
             <Text style={styles.infoText}>{profile.phone || "No phone number set"}</Text>
           </View>
           
@@ -252,191 +318,269 @@ export default function HomeScreen() {
       {/* Main Content Area */}
       {activeTab === 'home' ? renderHomeContent() : renderProfileContent()}
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNavigation}>
-        <TouchableOpacity 
-          style={[styles.navButton, activeTab === 'home' && styles.activeNavButton]} 
-          onPress={() => setActiveTab('home')}
-        >
-          <FontAwesome 
-            name="home" 
-            size={24} 
-            color={activeTab === 'home' ? "#2196F3" : "#333"} 
-          />
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.navButton, activeTab === 'profile' && styles.activeNavButton]} 
-          onPress={() => setActiveTab('profile')}
-        >
-          <FontAwesome 
-            name="user" 
-            size={24} 
-            color={activeTab === 'profile' ? "#2196F3" : "#333"} 
-          />
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navButton}>
-          <FontAwesome name="bars" size={24} color="#333" />
-        </TouchableOpacity>
+      {/* Bottom Navigation Bar */}
+      <View style={styles.bottomNavContainer}>
+        <View style={styles.bottomNavigation}>
+          <TouchableOpacity 
+            style={[styles.navButton, activeTab === 'home' && styles.activeNavButton]} 
+            onPress={() => setActiveTab('home')}
+          >
+            <FontAwesome5 
+              name="home" 
+              size={20} 
+              color={activeTab === 'home' ? "#fff" : "#aaa"} 
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.sosButton} 
+            onPress={() => router.push('/(app)/sos')}
+          >
+            <FontAwesome5 
+              name="exclamation-triangle" 
+              size={20} 
+              color="#fff" 
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.navButton, activeTab === 'profile' && styles.activeNavButton]} 
+            onPress={() => setActiveTab('profile')}
+          >
+            <FontAwesome5 
+              name="user" 
+              size={20} 
+              color={activeTab === 'profile' ? "#fff" : "#aaa"} 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+// Dark map style
+const mapStyle = [
+  {
+    "elementType": "geometry",
+    "stylers": [{"color": "#212121"}]
+  },
+  {
+    "elementType": "labels.icon",
+    "stylers": [{"visibility": "off"}]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#757575"}]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [{"color": "#212121"}]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "geometry",
+    "stylers": [{"color": "#757575"}]
+  },
+  // Additional map styles can be added here
+];
+
+const styles = {
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#121212', // Matt black background
+  },
+  
+  // Status display styles
+  statusWrapper: {
+    position: 'absolute',
+    top: 40,
+    alignSelf: 'center',
+    zIndex: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 150,
+    height: 150,
+  },
+  pulsingCircle: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    alignSelf: 'center',
+  },
+  pulsingCircleInner: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignSelf: 'center',
   },
   statusContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'white',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  statusText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    justifyContent: 'center',
+    zIndex: 2,
   },
   shieldContainer: {
-    padding: 10,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
+  statusText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 5,
+  },
+  
+  // Map styles
   mapContainer: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    margin: 10,
+    overflow: 'hidden',
   },
   map: {
-    width: '100%',
-    height: '100%',
+    flex: 1,
   },
   loadingMap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#1c1c1c',
   },
-  buttonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 10,
+  loadingText: {
+    color: '#f0f0f0',
   },
-  actionButton: {
-    flex: 1,
-    margin: 5,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'column',
-  },
+  
+  // Report button
   reportButton: {
-    backgroundColor: '#2196F3',
+    position: 'absolute',
+    bottom: 100,
+    right: 20,
+    backgroundColor: '#333',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
   },
-  sosButton: {
-    backgroundColor: '#FF5252',
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginTop: 5,
+  
+  // Bottom navigation
+  bottomNavContainer: {
+    position: 'absolute',
+    bottom: 25,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   bottomNavigation: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: 'white',
-    padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+    borderRadius: 30,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '80%',
+    elevation: 8,
   },
   navButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 20,
   },
   activeNavButton: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#2196F3',
+    backgroundColor: '#333',
   },
+  sosButton: {
+    backgroundColor: '#FF5252',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 15,
+  },
+  
+  // Profile styles
   profileContainer: {
     flex: 1,
-    padding: 15,
+    backgroundColor: '#121212',
+    padding: 20,
   },
   profileHeader: {
     alignItems: 'center',
-    padding: 20,
+    marginVertical: 30,
   },
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#f0f0f0',
     marginTop: 10,
   },
   profileDetails: {
-    backgroundColor: 'white',
-    padding: 20,
+    backgroundColor: '#1e1e1e',
     borderRadius: 10,
+    padding: 20,
     marginTop: 20,
   },
   profileInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 15,
+    alignItems: 'center',
   },
   infoIcon: {
     marginRight: 15,
-    width: 20,
   },
   infoText: {
+    color: '#f0f0f0',
     fontSize: 16,
-    color: '#333',
   },
   editProfileButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#333',
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 10,
     alignItems: 'center',
     marginTop: 20,
   },
   editButtonText: {
-    color: 'white',
+    color: '#fff',
     fontWeight: 'bold',
   },
   logoutButton: {
-    backgroundColor: '#FF5252',
+    backgroundColor: '#444',
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 15,
   },
   logoutButtonText: {
-    color: 'white',
+    color: '#ff5252',
     fontWeight: 'bold',
   },
+  
+  // Form styles
   profileForm: {
-    backgroundColor: 'white',
-    padding: 20,
+    backgroundColor: '#1e1e1e',
     borderRadius: 10,
+    padding: 20,
     marginTop: 20,
   },
   formGroup: {
     marginBottom: 15,
   },
   formLabel: {
-    fontSize: 16,
-    marginBottom: 5,
-    color: '#333',
+    color: '#999',
+    marginBottom: 8,
   },
   formInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
+    backgroundColor: '#333',
+    color: '#f0f0f0',
     padding: 10,
+    borderRadius: 5,
     fontSize: 16,
   },
   formButtonGroup: {
@@ -446,19 +590,18 @@ const styles = StyleSheet.create({
   },
   formButton: {
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 10,
     alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 5,
+    width: '48%',
   },
   cancelButton: {
-    backgroundColor: '#9e9e9e',
+    backgroundColor: '#333',
   },
   saveButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#2196F3',
   },
   formButtonText: {
-    color: 'white',
+    color: '#fff',
     fontWeight: 'bold',
   },
-});
+};
