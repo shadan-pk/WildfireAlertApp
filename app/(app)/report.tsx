@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Animated, Dimensions, StatusBar } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet, Animated, Dimensions, StatusBar, Alert } from 'react-native';
 import { FontAwesome, FontAwesome5 } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { router } from 'expo-router';
-import { collection, addDoc, getDocs, serverTimestamp, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, deleteDoc, doc, query, where, setDoc, orderBy, getDoc } from 'firebase/firestore';
 import { FIREBASE_DB, FIREBASE_AUTH } from '../../FirebaseConfig';
 
 const { width, height } = Dimensions.get('window');
@@ -86,109 +86,98 @@ export default function ReportScreen() {
     // This would be integrated with your location tracking system
   }, []);
 
-  const getNextReportNumber = async (userEmail) => {
+  const getNextReportNumber = async (userEmail: string) => {
     try {
       const reportsRef = collection(FIREBASE_DB, "userLocation", userEmail, "reports");
-      const metadataRef = doc(reportsRef, "metadata");
-      const metadataDoc = await getDoc(metadataRef);
-  
-      let nextNumber;
+      const metadataDoc = await getDoc(doc(reportsRef, "metadata"));
+      
       if (!metadataDoc.exists()) {
-        nextNumber = 1; // First report if metadata doesn’t exist
-        await setDoc(metadataRef, { lastReportNumber: nextNumber });
-      } else {
-        const currentNumber = metadataDoc.data().lastReportNumber || 0;
-        nextNumber = currentNumber + 1;
-        await setDoc(metadataRef, { lastReportNumber: nextNumber }, { merge: true });
+        await setDoc(doc(reportsRef, "metadata"), { lastReportNumber: 1 });
+        return 1;
       }
+      
+      const currentNumber = metadataDoc.data().lastReportNumber || 0;
+      const nextNumber = currentNumber + 1;
       return nextNumber;
     } catch (error) {
       console.error("Error getting next report number:", error);
-      throw new Error("Could not generate report number");
+      return null;
     }
   };
+
   const fetchReports = async () => {
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (!currentUser?.email) return;
+
     try {
-      const userEmail = FIREBASE_AUTH.currentUser?.email;
-      if (!userEmail) return;
-  
-      const reportsRef = collection(FIREBASE_DB, "userLocation", userEmail, "reports");
-      const querySnapshot = await getDocs(reportsRef);
-  
+      const reportsRef = collection(FIREBASE_DB, "userLocation", currentUser.email, "reports");
+      const q = query(reportsRef, orderBy("reportNumber", "desc"));
+      const querySnapshot = await getDocs(q);
+      
       const reportsList = [];
       querySnapshot.forEach((doc) => {
-        if (doc.id !== 'metadata') { // Exclude metadata doc
-          reportsList.push({ id: doc.id, ...doc.data() });
+        if (doc.id !== 'metadata') {
+          reportsList.push(doc.data());
         }
       });
-  
-      // Sort by reportNumber
-      reportsList.sort((a, b) => a.reportNumber - b.reportNumber);
-      setReports(reportsList); // Assuming setReports is your state setter
+
+      setReports(reportsList);
     } catch (error) {
       console.error("Error fetching reports:", error);
     }
   };
 
+  useEffect(() => {
+    if (showReports) {
+      fetchReports();
+    }
+  }, [showReports]);
+
+  const handleDeleteReport = (reportNumber: number) => {
+    setReports(reports.filter(report => report.reportNumber !== reportNumber));
+  };
+
   const handleReport = async () => {
-    const userEmail = FIREBASE_AUTH.currentUser?.email;
-    if (!userEmail) {
-      console.error("No user email found");
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (!currentUser?.email) {
+      Alert.alert("Error", "You must be logged in to submit a report");
       return;
     }
-  
+
     try {
-      const nextReportNumber = await getNextReportNumber(userEmail);
-      const reportId = `report_${nextReportNumber}`;
-  
-      await setDoc(doc(FIREBASE_DB, "userLocation", userEmail, "reports", reportId), {
-        reportNumber: nextReportNumber,
-        description: "Test report", // Replace with your data
-        severity: "low", // Replace with your data
-        status: "pending",
-        timestamp: new Date().toISOString(),
-      });
-  
-      console.log(`Report ${reportId} submitted successfully`);
+      const nextReportNumber = await getNextReportNumber(currentUser.email);
+      
+      if (!nextReportNumber) {
+        throw new Error("Could not generate report number");
+      }
+
+      await setDoc(
+        doc(FIREBASE_DB, "userLocation", currentUser.email, "reports", "metadata"),
+        { lastReportNumber: nextReportNumber },
+        { merge: true }
+      );
+
+      await setDoc(
+        doc(FIREBASE_DB, "userLocation", currentUser.email, "reports", `report_${nextReportNumber}`),
+        {
+          reportNumber: nextReportNumber,
+          description,
+          severity,
+          timestamp: new Date().toISOString(),
+          status: 'pending'
+        }
+      );
+
+      Alert.alert(
+        "Report Submitted",
+        `Report #${nextReportNumber} has been submitted. Authorities have been notified.`,
+        [{ text: "OK", onPress: () => router.back() }]
+      );
     } catch (error) {
       console.error("Error submitting report:", error);
+      Alert.alert("Error", "Failed to submit report. Please try again.");
     }
   };
-  
-const handleDeleteReport = async (reportId) => {
-  const userEmail = FIREBASE_AUTH.currentUser?.email;
-  if (!userEmail) {
-    console.error("No user email found");
-    return;
-  }
-
-  try {
-    // Delete the report
-    await deleteDoc(doc(FIREBASE_DB, "userLocation", userEmail, "reports", reportId));
-
-    // Fetch remaining reports to find the highest reportNumber
-    const reportsRef = collection(FIREBASE_DB, "userLocation", userEmail, "reports");
-    const querySnapshot = await getDocs(reportsRef);
-    let maxReportNumber = 0;
-
-    querySnapshot.forEach((doc) => {
-      if (doc.id !== "metadata") { // Exclude metadata document
-        const data = doc.data();
-        if (data.reportNumber > maxReportNumber) {
-          maxReportNumber = data.reportNumber;
-        }
-      }
-    });
-
-    // Update metadata with the highest remaining reportNumber
-    const metadataRef = doc(reportsRef, "metadata");
-    await setDoc(metadataRef, { lastReportNumber: maxReportNumber }, { merge: true });
-
-    console.log(`Report ${reportId} deleted, lastReportNumber updated to ${maxReportNumber}`);
-  } catch (error) {
-    console.error("Error deleting report:", error);
-  }
-};
 
   return (
     <View style={styles.container}>
