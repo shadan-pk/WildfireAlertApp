@@ -132,7 +132,7 @@ export default function HomeScreen() {
 
   // Render home content
   const renderHomeContent = () => (
-    <>
+    <View style={styles.homeContentContainer}>
       {/* Status Display - New Pulsing Design */}
       <View style={styles.statusWrapper}>
         <Animated.View 
@@ -146,7 +146,7 @@ export default function HomeScreen() {
         />
         <Animated.View 
           style={[
-            styles.pulsingCircleInner,
+            styles.p,styles.pulsingCircleInner,
             { 
               transform: [{ scale: pulseAnim }],
               backgroundColor: status === "Safe" ? 'rgba(67, 160, 71, 0.4)' : 'rgba(255, 82, 82, 0.4)',
@@ -169,11 +169,12 @@ export default function HomeScreen() {
           </Text>
         </View>
       </View>
-
-      {/* Map Area */}
-      <View style={styles.mapContainer}>
-        {currentLocation ? (
-          <MapView
+  
+      {/* Container for Map (Labeled "2" in the sketch) */}
+      <View style={styles.mapWrapper}>
+        <View style={styles.mapContainer}>
+          {currentLocation ? (
+            <MapView
             ref={mapRef}
             style={styles.map}
             initialRegion={{
@@ -184,21 +185,22 @@ export default function HomeScreen() {
             }}
             customMapStyle={mapStyle}
           >
-            <Marker
-              coordinate={{
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude
-              }}
-              title="Your Location"
-            />
-          </MapView>
-        ) : (
-          <View style={styles.loadingMap}>
-            <Text style={styles.loadingText}>Loading map...</Text>
-          </View>
-        )}
+              <Marker
+                coordinate={{
+                  latitude: currentLocation.latitude,
+                  longitude: currentLocation.longitude
+                }}
+                title="Your Location"
+              />
+            </MapView>
+          ) : (
+            <View style={styles.loadingMap}>
+              <Text style={styles.loadingText}>Loading map...</Text>
+            </View>
+          )}
+        </View>
       </View>
-
+  
       {/* Report Button */}
       <TouchableOpacity 
         style={styles.reportButton}
@@ -206,7 +208,7 @@ export default function HomeScreen() {
       >
         <FontAwesome5 name="exclamation-circle" size={24} color="#fff" />
       </TouchableOpacity>
-    </>
+    </View>
   );
 
   // Render profile content
@@ -361,28 +363,133 @@ export default function HomeScreen() {
 
 // Dark map style
 const mapStyle = [
+  // General background (geometry)
   {
     "elementType": "geometry",
-    "stylers": [{"color": "#212121"}]
+    "stylers": [
+      { "color": "#1C2526" } // Slightly darker, cooler-toned background (dark charcoal with a blue tint)
+    ]
   },
+
+  // Labels: Icons (keep them off for a cleaner look)
   {
     "elementType": "labels.icon",
-    "stylers": [{"visibility": "off"}]
+    "stylers": [
+      { "visibility": "off" }
+    ]
   },
+
+  // Labels: Text fill (for readability)
   {
     "elementType": "labels.text.fill",
-    "stylers": [{"color": "#757575"}]
+    "stylers": [
+      { "color": "#B0BEC5" } // Keep the light gray-blue for contrast
+    ]
   },
+
+  // Labels: Text stroke (for better readability)
   {
     "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#212121"}]
+    "stylers": [
+      { "color": "#0F1415" }, // Darker stroke for higher contrast
+      { "weight": 2.5 }       // Slightly thicker stroke for better readability
+    ]
   },
+
+  // Administrative boundaries
   {
     "featureType": "administrative",
     "elementType": "geometry",
-    "stylers": [{"color": "#757575"}]
+    "stylers": [
+      { "color": "#3A4445" } // Slightly lighter gray for boundaries
+    ]
   },
-  // Additional map styles can be added here
+
+  // Landscape (natural areas)
+  {
+    "featureType": "landscape",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#252F31" } // Darker, cooler tone for landscapes
+    ]
+  },
+
+  // Points of Interest (POIs)
+  {
+    "featureType": "poi",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#2F3B3D" }, // Darker slate for POIs to avoid clashing with buildings
+      { "visibility": "simplified" } // Reduce POI prominence to focus on buildings
+    ]
+  },
+
+  // Roads: Main geometry
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#4A5557" }, // Slightly lighter gray for roads to stand out
+      { "weight": 1.5 }       // Keep roads thicker for visibility
+    ]
+  },
+
+  // Roads: Stroke (outline)
+  {
+    "featureType": "road",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      { "color": "#1A1F20" }, // Dark outline for roads
+      { "weight": 1 }
+    ]
+  },
+
+  // Water
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#1A2528" } // Darker blue-gray for water
+    ]
+  },
+
+  // Transit (e.g., train lines)
+  {
+    "featureType": "transit",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#3F4A4C" } // Muted tone for transit
+    ]
+  },
+
+  // Buildings: Make them stand out
+  {
+    "featureType": "building",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#5A6A6F" }, // Lighter blue-gray for buildings to stand out against the background
+      { "visibility": "on" }  // Ensure buildings are visible
+    ]
+  },
+
+  // Buildings: Add a subtle outline to make them pop
+  {
+    "featureType": "building",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      { "color": "#2A3436" }, // Dark outline for buildings
+      { "weight": 0.5 }       // Thin stroke to avoid overpowering
+    ]
+  },
+
+  // Buildings: Fill (optional, for additional contrast)
+  {
+    "featureType": "building",
+    "elementType": "geometry.fill",
+    "stylers": [
+      { "color": "#5A6A6F" } // Match the geometry color
+    ]
+  }
 ];
 
 const styles = {
@@ -390,11 +497,14 @@ const styles = {
     flex: 1,
     backgroundColor: '#121212', // Matt black background
   },
-  
+  homeContentContainer: {
+    flex: 1,
+    paddingTop: 20, // Add padding to avoid overlap with statusWrapper
+  },
   // Status display styles
   statusWrapper: {
     position: 'absolute',
-    top: 40,
+    top: 60,
     alignSelf: 'center',
     zIndex: 10,
     alignItems: 'center',
@@ -435,16 +545,24 @@ const styles = {
     fontWeight: 'bold',
     marginTop: 5,
   },
-  
+  mapWrapper: {
+    marginTop: 200, // Adjust this value to position the map below the status display
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
   // Map styles
   mapContainer: {
-    flex: 1,
+    top:70,
+    width: '100%', // Make the map container take most of the width
+    height: '100%', // Increase the height to make the map bigger
+    borderRadius: 15, // Add some border radius for a polished look
     overflow: 'hidden',
-    height: '50%',
+    backgroundColor: '#1c1c1c', // Background color for loading state
   },
   map: {
-    flex: 1,
-    height:'100%',
+    width: '100%',
+    height: '100%',
   },
   loadingMap: {
     flex: 1,
@@ -459,7 +577,7 @@ const styles = {
   // Report button
   reportButton: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 120, // Adjusted to avoid overlap with the bottom navigation
     right: 20,
     backgroundColor: '#333',
     width: 50,
