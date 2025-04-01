@@ -33,30 +33,35 @@ const ReportsModal = ({ visible, onClose, reports, userEmail, onDelete }) => (
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <View style={styles.reportItem}>
+                {/* Report Header */}
                 <View style={styles.reportHeader}>
+                  {/* Severity Indicator */}
                   <View style={[
-                    styles.severityIndicator, 
-                    { backgroundColor: item.severity === 'low' 
-                      ? '#4CAF50' 
-                      : item.severity === 'medium' 
-                        ? '#FFA000' 
-                        : '#FF5252' 
+                    styles.severityIndicator,
+                    {
+                      backgroundColor:
+                        item.severity === 'low'
+                          ? '#4CAF50' // Green for low
+                          : item.severity === 'medium'
+                          ? '#FFA000' // Orange for medium
+                          : '#FF5252' // Red for high
                     }
                   ]} />
+                  {/* Timestamp */}
                   <Text style={styles.reportTimestamp}>
-                    {item.timestamp ? new Date(item.timestamp.toDate()).toLocaleString() : 'Unknown date'}
+                    {item.timestamp ? new Date(item.timestamp).toLocaleString() : 'Unknown date'}
                   </Text>
                 </View>
+                {/* Description */}
                 <Text style={styles.reportDescription}>{item.description}</Text>
-                {item.reporter === userEmail && (
-                  <TouchableOpacity 
-                    style={styles.deleteButton}
-                    onPress={() => onDelete(item.id)}
-                  >
-                    <FontAwesome name="trash" size={16} color="#fff" />
-                    <Text style={styles.deleteText}>Delete</Text>
-                  </TouchableOpacity>
-                )}
+                {/* Delete Button */}
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => onDelete(item.id)}
+                >
+                  <FontAwesome name="trash" size={16} color="#fff" />
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
               </View>
             )}
           />
@@ -81,73 +86,109 @@ export default function ReportScreen() {
     // This would be integrated with your location tracking system
   }, []);
 
+  const getNextReportNumber = async (userEmail) => {
+    try {
+      const reportsRef = collection(FIREBASE_DB, "userLocation", userEmail, "reports");
+      const metadataRef = doc(reportsRef, "metadata");
+      const metadataDoc = await getDoc(metadataRef);
+  
+      let nextNumber;
+      if (!metadataDoc.exists()) {
+        nextNumber = 1; // First report if metadata doesn’t exist
+        await setDoc(metadataRef, { lastReportNumber: nextNumber });
+      } else {
+        const currentNumber = metadataDoc.data().lastReportNumber || 0;
+        nextNumber = currentNumber + 1;
+        await setDoc(metadataRef, { lastReportNumber: nextNumber }, { merge: true });
+      }
+      return nextNumber;
+    } catch (error) {
+      console.error("Error getting next report number:", error);
+      throw new Error("Could not generate report number");
+    }
+  };
   const fetchReports = async () => {
     try {
       const userEmail = FIREBASE_AUTH.currentUser?.email;
       if (!userEmail) return;
-      
-      const q = query(collection(FIREBASE_DB, "reports"), where("reporter", "==", userEmail));
-      const querySnapshot = await getDocs(q);
-      
+  
+      const reportsRef = collection(FIREBASE_DB, "userLocation", userEmail, "reports");
+      const querySnapshot = await getDocs(reportsRef);
+  
       const reportsList = [];
       querySnapshot.forEach((doc) => {
-        reportsList.push({ id: doc.id, ...doc.data() });
+        if (doc.id !== 'metadata') { // Exclude metadata doc
+          reportsList.push({ id: doc.id, ...doc.data() });
+        }
       });
-      
-      // Sort by timestamp, newest first
-      reportsList.sort((a, b) => b.timestamp - a.timestamp);
-      setReports(reportsList);
+  
+      // Sort by reportNumber
+      reportsList.sort((a, b) => a.reportNumber - b.reportNumber);
+      setReports(reportsList); // Assuming setReports is your state setter
     } catch (error) {
       console.error("Error fetching reports:", error);
     }
   };
 
   const handleReport = async () => {
-    if (!description.trim()) {
-      // Show validation error
+    const userEmail = FIREBASE_AUTH.currentUser?.email;
+    if (!userEmail) {
+      console.error("No user email found");
       return;
     }
-
-    setIsSubmitting(true);
-
+  
     try {
-      const userEmail = FIREBASE_AUTH.currentUser?.email;
-      if (!userEmail) return;
-
-      // Add report to Firestore
-      await addDoc(collection(FIREBASE_DB, "reports"), {
-        severity,
-        description,
-        timestamp: serverTimestamp(),
-        reporter: userEmail,
-        location: location || { latitude: 0, longitude: 0 },
+      const nextReportNumber = await getNextReportNumber(userEmail);
+      const reportId = `report_${nextReportNumber}`;
+  
+      await setDoc(doc(FIREBASE_DB, "userLocation", userEmail, "reports", reportId), {
+        reportNumber: nextReportNumber,
+        description: "Test report", // Replace with your data
+        severity: "low", // Replace with your data
+        status: "pending",
+        timestamp: new Date().toISOString(),
       });
-
-      // Clear form
-      setDescription('');
-      setSeverity('medium');
-      setIsSubmitting(false);
-      
-      // Refresh reports list
-      fetchReports();
-      
-      // Show success message or navigate back
-      router.back();
+  
+      console.log(`Report ${reportId} submitted successfully`);
     } catch (error) {
       console.error("Error submitting report:", error);
-      setIsSubmitting(false);
     }
   };
+  
+const handleDeleteReport = async (reportId) => {
+  const userEmail = FIREBASE_AUTH.currentUser?.email;
+  if (!userEmail) {
+    console.error("No user email found");
+    return;
+  }
 
-  const handleDeleteReport = async (reportId) => {
-    try {
-      await deleteDoc(doc(FIREBASE_DB, "reports", reportId));
-      // Update state to remove deleted report
-      setReports(reports.filter(report => report.id !== reportId));
-    } catch (error) {
-      console.error("Error deleting report:", error);
-    }
-  };
+  try {
+    // Delete the report
+    await deleteDoc(doc(FIREBASE_DB, "userLocation", userEmail, "reports", reportId));
+
+    // Fetch remaining reports to find the highest reportNumber
+    const reportsRef = collection(FIREBASE_DB, "userLocation", userEmail, "reports");
+    const querySnapshot = await getDocs(reportsRef);
+    let maxReportNumber = 0;
+
+    querySnapshot.forEach((doc) => {
+      if (doc.id !== "metadata") { // Exclude metadata document
+        const data = doc.data();
+        if (data.reportNumber > maxReportNumber) {
+          maxReportNumber = data.reportNumber;
+        }
+      }
+    });
+
+    // Update metadata with the highest remaining reportNumber
+    const metadataRef = doc(reportsRef, "metadata");
+    await setDoc(metadataRef, { lastReportNumber: maxReportNumber }, { merge: true });
+
+    console.log(`Report ${reportId} deleted, lastReportNumber updated to ${maxReportNumber}`);
+  } catch (error) {
+    console.error("Error deleting report:", error);
+  }
+};
 
   return (
     <View style={styles.container}>

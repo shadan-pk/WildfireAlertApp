@@ -440,9 +440,11 @@ const styles = {
   mapContainer: {
     flex: 1,
     overflow: 'hidden',
+    height: '50%',
   },
   map: {
     flex: 1,
+    height:'100%',
   },
   loadingMap: {
     flex: 1,
