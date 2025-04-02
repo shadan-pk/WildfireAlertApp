@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Animated, Easing } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker } from 'react-native-maps';
 import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
