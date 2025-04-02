@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Animated, Easing } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome5 } from '@expo/vector-icons';
-import MapView, { Marker } from 'react-native-maps';
+import MapView from 'react-native-maps';
 import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { router } from 'expo-router';
+import MapComponent from './MapComponent'; // Import the new MapComponent
 
 export default function HomeScreen() {
   const { currentLocation, locationUpdateEnabled } = useLocationTracking();
@@ -145,7 +146,7 @@ export default function HomeScreen() {
         />
         <Animated.View 
           style={[
-            styles.p,styles.pulsingCircleInner,
+            styles.pulsingCircleInner,
             { 
               transform: [{ scale: pulseAnim }],
               backgroundColor: status === "Safe" ? 'rgba(67, 160, 71, 0.4)' : 'rgba(255, 82, 82, 0.4)',
@@ -169,40 +170,8 @@ export default function HomeScreen() {
         </View>
       </View>
   
-      {/* Container for Map (Labeled "2" in the sketch) */}
-      <View style={styles.mapWrapper}>
-        <View style={styles.mapContainer}>
-          {currentLocation ? (
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              camera={{
-                center: {
-                  latitude: currentLocation.latitude,
-                  longitude: currentLocation.longitude,
-                },
-                pitch: 85, // This creates the 3D effect (0-60 degrees)
-                heading: 0, // Camera direction (0 is north)
-                altitude: 1000, // Optional: altitude in meters
-                zoom: 18, // Zoom level
-              }}
-              customMapStyle={mapStyle}
-            >
-              <Marker
-                coordinate={{
-                  latitude: currentLocation.latitude,
-                  longitude: currentLocation.longitude
-                }}
-                title="Your Location"
-              />
-            </MapView>
-          ) : (
-            <View style={styles.loadingMap}>
-              <Text style={styles.loadingText}>Loading map...</Text>
-            </View>
-          )}
-        </View>
-      </View>
+      {/* Map Component - Now using the extracted MapComponent */}
+      <MapComponent currentLocation={currentLocation} mapRef={mapRef} />
   
       {/* Report Button */}
       <TouchableOpacity 
@@ -364,70 +333,6 @@ export default function HomeScreen() {
   );
 }
 
-// Dark map style
-const mapStyle = [
-  {
-    "elementType": "geometry",
-    "stylers": [{"color": "#1A1A1A"}] // Deep black background
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [{"visibility": "off"}] // Icons off for cleaner look
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#FF5722"}] // Vibrant orange text
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {"color": "#000000"}, // Black stroke
-      {"weight": 2}         // Thicker stroke for contrast
-    ]
-  },
-  {
-    "featureType": "administrative",
-    "elementType": "geometry",
-    "stylers": [{"color": "#ffff"}] // Bright orange boundaries
-  },
-  {
-    "featureType": "landscape",
-    "elementType": "geometry",
-    "stylers": [{"color": "#212121"}] // Dark gray for landscape
-  },
-  {
-    "featureType": "poi",
-    "elementType": "geometry",
-    "stylers": [{"color": "#2C2C2C"}] // Slightly lighter black for POIs
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [
-      {"color": "#FF5722"},     // Orange roads
-      {"weight": 1.5}           // Thicker roads
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.stroke",
-    "stylers": [
-      {"color": "#000000"},     // Black road outlines
-      {"weight": 1}
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [{"color": "#0A0A0A"}] // Very dark black water
-  },
-  {
-    "featureType": "transit",
-    "elementType": "geometry",
-    "stylers": [{"color": "#FFB300"}] // Amber transit lines
-  }
-];
-
 const styles = {
   container: {
     flex: 1,
@@ -447,8 +352,6 @@ const styles = {
     justifyContent: 'center',
     width: 200,
     height: 180,
-    //shadow
-    
   },
   pulsingCircle: {
     position: 'absolute',
@@ -482,39 +385,6 @@ const styles = {
     fontSize: 18,
     fontWeight: 'bold',
     marginTop: 5,
-  },
-  mapWrapper: {
-    marginTop: 230, // Adjust this value to position the map below the status display
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  // Map styles
-  mapContainer: {
-    top: 70,
-    width: '100%', // Full width
-    height: '100%', // Full height
-    borderRadius: 15, // Rounded corners
-    overflow: 'hidden',
-    backgroundColor: '#1c1c1c', // Background color for loading state
-  
-    // Shadow for Android
-    elevation: 30, // Higher value for a stronger 3D effect
-    backgroundColor: '#222', // Slightly lighter than pure black for depth
-  },
-  
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  loadingMap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1c1c1c',
-  },
-  loadingText: {
-    color: '#f0f0f0',
   },
   
   // Report button
