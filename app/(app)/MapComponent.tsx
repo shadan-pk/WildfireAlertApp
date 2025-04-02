@@ -206,72 +206,74 @@ const MapComponent = ({
     <View style={styles.mapWrapper}>
       <View style={styles.mapContainer}>
         {currentLocation ? (
-          <MapView
+            <MapView
             ref={mapRef}
             style={styles.map}
-            // camera={{
-            //   center: {
-            //     latitude: currentLocation.latitude,
-            //     longitude: currentLocation.longitude,
-            //   },
-            //   pitch: 85, // This creates the 3D effect (0-60 degrees)
-            //   heading: 0, // Camera direction (0 is north)
-            //   altitude: 1000, // Optional: altitude in meters
-            //   zoom: 18, // Zoom level
-            // }}
             camera={{
                 center: {
-                  latitude: 11.017507062924722,
-                  longitude: 76.31043383943484,
+                latitude: currentLocation?.latitude || 11.017507062924722,
+                longitude: currentLocation?.longitude || 76.31043383943484,
                 },
-                pitch: 0,
+                pitch: 85, // Keep the original steep pitch for 3D effect
                 heading: 0,
-                altitude: 1000,
-                zoom: 18,
-              }}
+                altitude: 500, // Reduced altitude for closer zoom
+                zoom: 20, // Increased zoom level for more detail
+            }}
+            minZoomLevel={10} // Prevent zooming out too far
+            maxZoomLevel={22} // Allow very close zooming
+            showsUserLocation={true}
+            followsUserLocation={true}
+            showsMyLocationButton={true}
+            showsCompass={true}
             customMapStyle={mapStyle}
-          >
+            onRegionChange={(region) => {
+                // You can use this to track map movement during zoom
+                console.log('Region changing:', region);
+            }}
+            >
             {/* Current user location marker */}
             <Marker
-              coordinate={{
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude
-              }}
-              title="Your Location"
+                coordinate={{
+                latitude: currentLocation?.latitude || 11.017507062924722,
+                longitude: currentLocation?.longitude || 76.31043383943484
+                }}
+                title="Your Location"
+                tracksViewChanges={false} // Improves performance
             />
             
             {/* Display heatmap if we have data */}
             {hasValidHeatmap && (
-            <Heatmap
+                <Heatmap
                 points={processedHeatmapPoints}
-                radius={25}
+                radius={50}
                 opacity={0.7}
                 gradient={{
-                colors: ["blue", "lime", "yellow", "orange", "red"],
-                startPoints: [0.1, 0.3, 0.5, 0.7, 0.9],
-                colorMapSize: 256
+                    colors: ["blue", "lime", "yellow", "orange", "red"],
+                    startPoints: [0.1, 0.3, 0.5, 0.7, 0.9],
+                    colorMapSize: 256
                 }}
-            />
+                />
             )}
             
             {/* Display other users with safety status */}
             {userLocations.map(user => {
-              const isSafe = userSafetyStatus[user.uid]?.safe;
-              
-              return (
+                const isSafe = userSafetyStatus[user.uid]?.safe;
+                
+                return (
                 <Marker
-                  key={user.uid}
-                  coordinate={{
+                    key={user.uid}
+                    coordinate={{
                     latitude: user.lat,
                     longitude: user.lon
-                  }}
-                  title={user.email || user.uid}
-                  description={isSafe !== undefined ? (isSafe ? 'SAFE' : 'DANGER') : 'Unknown'}
-                  pinColor={isSafe !== undefined ? (isSafe ? 'green' : 'red') : 'blue'}
+                    }}
+                    title={user.email || user.uid}
+                    description={isSafe !== undefined ? (isSafe ? 'SAFE' : 'DANGER') : 'Unknown'}
+                    pinColor={isSafe !== undefined ? (isSafe ? 'green' : 'red') : 'blue'}
+                    tracksViewChanges={false} // Improves performance
                 />
-              );
+                );
             })}
-          </MapView>
+            </MapView>
         ) : (
           <View style={styles.loadingMap}>
             <Text style={styles.loadingText}>Loading map...</Text>
@@ -351,7 +353,7 @@ const styles = {
     marginTop: 230, // Adjust this value to position the map below the status display
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    width: '100%',
+    width: '100%' as unknown as number, // Fix width type issue
   },
   mapContainer: {
     top: 70,
