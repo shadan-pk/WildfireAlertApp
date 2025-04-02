@@ -3,13 +3,33 @@ import { View, Text, TouchableOpacity, TextInput, ScrollView, Animated, Easing }
 import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import MapView from 'react-native-maps';
-import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot, collection, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { router } from 'expo-router';
 import MapComponent from './MapComponent'; // Import the new MapComponent
+
+// Define your interfaces
+interface HeatmapPoint {
+  lat: number | { $numberDouble: string };
+  lon: number | { $numberDouble: string };
+  prediction: number | { $numberInt: string };
+  metadata?: {
+    windSpeed?: number;
+    temperature?: number;
+    humidity?: number;
+  };
+}
+
+interface UserLocation {
+  uid: string;
+  email?: string;
+  lat: number;
+  lon: number;
+}
+
 
 export default function HomeScreen() {
   const { currentLocation, locationUpdateEnabled } = useLocationTracking();
@@ -19,7 +39,10 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState('home');
   const [isEditing, setIsEditing] = useState(false);
   const [editableProfile, setEditableProfile] = useState({});
-  const mapRef = useRef(null);
+  // const mapRef = useRef(null);
+  const mapRef = useRef<MapView>(null);
+  const [heatmapData, setHeatmapData] = useState<HeatmapPoint[]>([]);
+  const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
   
   // Animation for pulsing effect
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -125,7 +148,29 @@ export default function HomeScreen() {
         console.error("Error fetching safety status:", error);
       }
     );
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
 
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(FIREBASE_DB, 'selectedScenario', 'current'),
+      (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const data = docSnapshot.data();
+          console.log('Fetched heatmap data:', data.heatmapData); // Log to verify data
+          setHeatmapData(data.heatmapData || []);
+        } else {
+          console.log('No heatmap data found');
+          setHeatmapData([]);
+        }
+      },
+      (error) => {
+        console.error('Error fetching heatmap data:', error);
+      }
+    );
+  
     // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
@@ -171,8 +216,14 @@ export default function HomeScreen() {
       </View>
   
       {/* Map Component - Now using the extracted MapComponent */}
-      <MapComponent currentLocation={currentLocation} mapRef={mapRef} />
-  
+      {/* <MapComponent currentLocation={currentLocation} mapRef={mapRef} /> */}
+      <MapComponent 
+          currentLocation={currentLocation} 
+          mapRef={mapRef}
+          heatmapData={heatmapData}
+          userLocations={userLocations}
+          onHeatmapRender={(pointCount) => console.log(`Rendered ${pointCount} heatmap points`)}
+        />
       {/* Report Button */}
       <TouchableOpacity 
         style={styles.reportButton}
