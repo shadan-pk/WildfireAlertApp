@@ -387,7 +387,7 @@ export default function HomeScreen() {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: '#121212', // Matt black background
+    backgroundColor: '#2a2a2a', // Matt black background
   },
   homeContentContainer: {
     flex: 1,

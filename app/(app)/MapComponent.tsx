@@ -214,10 +214,11 @@ const MapComponent = ({
                 latitude: currentLocation?.latitude || 11.017507062924722,
                 longitude: currentLocation?.longitude || 76.31043383943484,
                 },
-                pitch: 85, // Keep the original steep pitch for 3D effect
+                pitch: 55, // Keep the original steep pitch for 3D effect
                 heading: 0,
                 altitude: 500, // Reduced altitude for closer zoom
-                zoom: 20, // Increased zoom level for more detail
+                // zoom: 20, // Increased zoom level for more detail
+                zoom: 17, // Increased zoom level for more detail
             }}
             minZoomLevel={10} // Prevent zooming out too far
             maxZoomLevel={22} // Allow very close zooming
@@ -359,11 +360,11 @@ const styles = {
     top: 70,
     width: '100%', // Full width
     height: '100%', // Full height
-    borderRadius: 15, // Rounded corners
+    borderRadius: 35, // Rounded corners
     overflow: 'hidden' as const,
     backgroundColor: '#222', // Slightly lighter than pure black for depth
     // Shadow for Android
-    elevation: 30, // Higher value for a stronger 3D effect
+    elevation: 40, // Higher value for a stronger 3D effect
   },
   map: {
     width: '100%',
