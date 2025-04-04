@@ -91,3 +91,5 @@ export const HomeScreenStyles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+
+export default HomeScreenStyles;

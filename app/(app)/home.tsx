@@ -1,22 +1,75 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from "react-native";
-import { FontAwesome } from '@expo/vector-icons';
-import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Animated, Easing } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { FontAwesome5 } from '@expo/vector-icons';
+import MapView from 'react-native-maps';
+import { doc, getDoc, updateDoc, onSnapshot, collection, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { useFocusEffect } from "expo-router";
-import MapView, { Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
+import { FIREBASE_AUTH, FIREBASE_DB } from '../../FirebaseConfig';
+import { useLocationTracking } from '../../hooks/useLocationTracking';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { router } from 'expo-router';
+import MapComponent from './MapComponent'; // Import the new MapComponent
+
+// Define your interfaces
+interface HeatmapPoint {
+  lat: number | { $numberDouble: string };
+  lon: number | { $numberDouble: string };
+  prediction: number | { $numberInt: string };
+  metadata?: {
+    windSpeed?: number;
+    temperature?: number;
+    humidity?: number;
+  };
+}
+
+interface UserLocation {
+  uid: string;
+  email?: string;
+  lat: number;
+  lon: number;
+}
+
 
 export default function HomeScreen() {
+  const { currentLocation, locationUpdateEnabled } = useLocationTracking();
+  const { updateOnlineStatus } = useOnlineStatus();
   const [profile, setProfile] = useState({});
-  const [currentLocation, setCurrentLocation] = useState(null);
   const [status, setStatus] = useState("Safe");
   const [activeTab, setActiveTab] = useState('home');
   const [isEditing, setIsEditing] = useState(false);
   const [editableProfile, setEditableProfile] = useState({});
-  const mapRef = useRef(null);
-  const locationSubscription = useRef(null);
+  // const mapRef = useRef(null);
+  const mapRef = useRef<MapView>(null);
+  const [heatmapData, setHeatmapData] = useState<HeatmapPoint[]>([]);
+  const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
+  
+  // Animation for pulsing effect
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  
+  // Start pulsing animation
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1000,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        })
+      ])
+    );
+    
+    pulse.start();
+    
+    return () => pulse.stop();
+  }, [pulseAnim]);
   
   // Fetch user profile
   useFocusEffect(
@@ -48,102 +101,10 @@ export default function HomeScreen() {
     }, [])
   );
 
-  // Function to update location to Firestore and server
-  const updateLocationToServer = async (location) => {
-    const currentUser = FIREBASE_AUTH.currentUser;
-    if (!currentUser) return;
-    
-    try {
-      // Update to Firestore directly from client
-      await updateDoc(doc(FIREBASE_DB, "users", currentUser.uid), {
-        location: { 
-          lat: location.latitude, 
-          lon: location.longitude 
-        },
-        updatedAt: serverTimestamp()
-      });
-      
-      // Also send to prediction server
-      const serverResponse = await fetch('http://your-prediction-server-url/api/update-location', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          uid: currentUser.uid,
-          lat: location.latitude,
-          lon: location.longitude
-        }),
-      });
-      
-      if (!serverResponse.ok) {
-        throw new Error('Failed to update location to server');
-      }
-      
-      console.log('Location updated successfully to server and Firestore');
-    } catch (error) {
-      console.error('Error updating location:', error);
-    }
-  };
-
-  // Real-time location tracking
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.error('Permission to access location was denied');
-        return;
-      }
-
-      // Get initial location
-      let location = await Location.getCurrentPositionAsync({});
-      const initialLocation = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      };
-      setCurrentLocation(initialLocation);
-      
-      // Send initial location to server
-      updateLocationToServer(initialLocation);
-
-      // Subscribe to location updates
-      locationSubscription.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000,
-          distanceInterval: 10
-        },
-        (newLocation) => {
-          const updatedLocation = {
-            latitude: newLocation.coords.latitude,
-            longitude: newLocation.coords.longitude
-          };
-          setCurrentLocation(updatedLocation);
-          
-          // Update server with new location
-          updateLocationToServer(updatedLocation);
-          
-          // Animate map to new location
-          mapRef.current?.animateToRegion({
-            ...updatedLocation,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }, 1000);
-        }
-      );
-    })();
-
-    // Cleanup function
-    return () => {
-      if (locationSubscription.current) {
-        locationSubscription.current.remove();
-      }
-    };
-  }, []);
-
   // Handle logout
   const handleLogout = async () => {
     try {
+      await updateOnlineStatus(false);
       await signOut(FIREBASE_AUTH);
     } catch (error) {
       console.error('Failed to logout:', error);
@@ -169,65 +130,115 @@ export default function HomeScreen() {
     }
   };
 
+  // Add useEffect to listen for safety status changes
+  useEffect(() => {
+    const currentUser = FIREBASE_AUTH.currentUser;
+    if (!currentUser?.email) return;
+
+    // Set up real-time listener for safety status
+    const unsubscribe = onSnapshot(
+      doc(FIREBASE_DB, "userLocation", currentUser.email, "situation", "SafeOrNot"),
+      (doc) => {
+        if (doc.exists()) {
+          const isSafe = doc.data().safe;
+          setStatus(isSafe ? "Safe" : "Unsafe");
+        }
+      },
+      (error) => {
+        console.error("Error fetching safety status:", error);
+      }
+    );
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
+
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(FIREBASE_DB, 'selectedScenario', 'current'),
+      (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const data = docSnapshot.data();
+          console.log('Fetched heatmap data:', data.heatmapData); // Log to verify data
+          setHeatmapData(data.heatmapData || []);
+        } else {
+          console.log('No heatmap data found');
+          setHeatmapData([]);
+        }
+      },
+      (error) => {
+        console.error('Error fetching heatmap data:', error);
+      }
+    );
+  
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
+
   // Render home content
   const renderHomeContent = () => (
-    <>
-      {/* Status Display */}
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusText}>{status}</Text>
-        <View style={styles.shieldContainer}>
-          <FontAwesome name="shield" size={24} color={status === "Safe" ? "#4CAF50" : "#FF5252"} />
+    <View style={styles.homeContentContainer}>
+      {/* Status Display - New Pulsing Design */}
+      <View style={styles.statusWrapper}>
+        <Animated.View 
+          style={[
+            styles.pulsingCircle,
+            { 
+              transform: [{ scale: pulseAnim }],
+              backgroundColor: status === "Safe" ? 'rgba(67, 160, 71, 0.2)' : 'rgba(255, 82, 82, 0.2)',
+            }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.pulsingCircleInner,
+            { 
+              transform: [{ scale: pulseAnim }],
+              backgroundColor: status === "Safe" ? 'rgba(67, 160, 71, 0.4)' : 'rgba(255, 82, 82, 0.4)',
+            }
+          ]}
+        />
+        <View style={styles.statusContainer}>
+          <View style={[
+            styles.shieldContainer,
+            { backgroundColor: status === "Safe" ? '#43A047' : '#FF5252' }
+          ]}>
+            <FontAwesome5
+              name={status === "Safe" ? "shield-alt" : "fire-alt"} 
+              size={32} 
+              color="#fff" 
+            />
+          </View>
+          <Text style={styles.statusText}>
+            {status}
+          </Text>
         </View>
       </View>
-
-      {/* Map Area */}
-      <View style={styles.mapContainer}>
-        {currentLocation ? (
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            initialRegion={{
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-          >
-            <Marker
-              coordinate={{
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude
-              }}
-              title="Your Location"
-            />
-          </MapView>
-        ) : (
-          <View style={styles.loadingMap}>
-            <Text>Loading map...</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Alert Buttons */}
-      <View style={styles.buttonsContainer}>
-        <TouchableOpacity style={[styles.actionButton, styles.reportButton]}>
-          <FontAwesome name="exclamation-circle" size={32} color="white" />
-          <Text style={styles.buttonText}>Report</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.actionButton, styles.sosButton]}>
-          <FontAwesome name="exclamation-triangle" size={32} color="white" />
-          <Text style={styles.buttonText}>SOS Alert</Text>
-        </TouchableOpacity>
-      </View>
-    </>
+  
+      {/* Map Component - Now using the extracted MapComponent */}
+      {/* <MapComponent currentLocation={currentLocation} mapRef={mapRef} /> */}
+      <MapComponent 
+          currentLocation={currentLocation} 
+          mapRef={mapRef}
+          heatmapData={heatmapData}
+          userLocations={userLocations}
+          onHeatmapRender={(pointCount) => console.log(`Rendered ${pointCount} heatmap points`)}
+        />
+      {/* Report Button */}
+      <TouchableOpacity 
+        style={styles.reportButton}
+        onPress={() => router.push('/(app)/report')}
+      >
+        <FontAwesome5 name="exclamation-circle" size={24} color="#fff" />
+      </TouchableOpacity>
+    </View>
   );
 
   // Render profile content
   const renderProfileContent = () => (
     <ScrollView style={styles.profileContainer}>
       <View style={styles.profileHeader}>
-        <FontAwesome name="user-circle" size={80} color="#333" />
+        <FontAwesome5 name="user-circle" size={80} color="#f0f0f0" />
         <Text style={styles.profileName}>
           {profile.firstName} {profile.lastName}
         </Text>
@@ -241,6 +252,7 @@ export default function HomeScreen() {
               style={styles.formInput}
               value={editableProfile.firstName}
               onChangeText={(text) => setEditableProfile({...editableProfile, firstName: text})}
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -250,6 +262,7 @@ export default function HomeScreen() {
               style={styles.formInput}
               value={editableProfile.lastName}
               onChangeText={(text) => setEditableProfile({...editableProfile, lastName: text})}
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -259,6 +272,7 @@ export default function HomeScreen() {
               style={styles.formInput}
               value={editableProfile.location}
               onChangeText={(text) => setEditableProfile({...editableProfile, location: text})}
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -269,6 +283,7 @@ export default function HomeScreen() {
               value={editableProfile.phone}
               onChangeText={(text) => setEditableProfile({...editableProfile, phone: text})}
               keyboardType="phone-pad"
+              placeholderTextColor="#6c6c6c"
             />
           </View>
           
@@ -291,17 +306,17 @@ export default function HomeScreen() {
       ) : (
         <View style={styles.profileDetails}>
           <View style={styles.profileInfo}>
-            <FontAwesome name="envelope" size={18} color="#666" style={styles.infoIcon} />
+            <FontAwesome5 name="envelope" size={18} color="#999" style={styles.infoIcon} />
             <Text style={styles.infoText}>{profile.email}</Text>
           </View>
           
           <View style={styles.profileInfo}>
-            <FontAwesome name="map-marker" size={18} color="#666" style={styles.infoIcon} />
+            <FontAwesome5 name="map-marker-alt" size={18} color="#999" style={styles.infoIcon} />
             <Text style={styles.infoText}>{profile.location || "No address set"}</Text>
           </View>
           
           <View style={styles.profileInfo}>
-            <FontAwesome name="phone" size={18} color="#666" style={styles.infoIcon} />
+            <FontAwesome5 name="phone" size={18} color="#999" style={styles.infoIcon} />
             <Text style={styles.infoText}>{profile.phone || "No phone number set"}</Text>
           </View>
           
@@ -328,191 +343,228 @@ export default function HomeScreen() {
       {/* Main Content Area */}
       {activeTab === 'home' ? renderHomeContent() : renderProfileContent()}
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNavigation}>
-        <TouchableOpacity 
-          style={[styles.navButton, activeTab === 'home' && styles.activeNavButton]} 
-          onPress={() => setActiveTab('home')}
-        >
-          <FontAwesome 
-            name="home" 
-            size={24} 
-            color={activeTab === 'home' ? "#2196F3" : "#333"} 
-          />
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.navButton, activeTab === 'profile' && styles.activeNavButton]} 
-          onPress={() => setActiveTab('profile')}
-        >
-          <FontAwesome 
-            name="user" 
-            size={24} 
-            color={activeTab === 'profile' ? "#2196F3" : "#333"} 
-          />
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navButton}>
-          <FontAwesome name="bars" size={24} color="#333" />
-        </TouchableOpacity>
+      {/* Bottom Navigation Bar */}
+      <View style={styles.bottomNavContainer}>
+        <View style={styles.bottomNavigation}>
+          <TouchableOpacity 
+            style={[styles.navButton, activeTab === 'home' && styles.activeNavButton]} 
+            onPress={() => setActiveTab('home')}
+          >
+            <FontAwesome5 
+              name="home" 
+              size={20} 
+              color={activeTab === 'home' ? "#fff" : "#aaa"} 
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.sosButton} 
+            onPress={() => router.push('/(app)/sos')}
+          >
+            <FontAwesome5 
+              name="exclamation-triangle" 
+              size={20} 
+              color="#fff" 
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.navButton, activeTab === 'profile' && styles.activeNavButton]} 
+            onPress={() => setActiveTab('profile')}
+          >
+            <FontAwesome5 
+              name="user" 
+              size={20} 
+              color={activeTab === 'profile' ? "#fff" : "#aaa"} 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = {
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2a2a2a', // Matt black background
+  },
+  homeContentContainer: {
+    flex: 1,
+    paddingTop: 20, // Add padding to avoid overlap with statusWrapper
+  },
+  // Status display styles
+  statusWrapper: {
+    position: 'absolute',
+    top: 60,
+    alignSelf: 'center',
+    zIndex: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 200,
+    height: 180,
+  },
+  pulsingCircle: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    alignSelf: 'center',
+  },
+  pulsingCircleInner: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 70,
+    alignSelf: 'center',
   },
   statusContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'white',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  statusText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    justifyContent: 'center',
+    zIndex: 2,
   },
   shieldContainer: {
-    padding: 10,
-  },
-  mapContainer: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    margin: 10,
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  loadingMap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#e0e0e0',
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 10,
-  },
-  actionButton: {
-    flex: 1,
-    margin: 5,
-    padding: 15,
-    borderRadius: 10,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'column',
+    marginBottom: 8,
   },
-  reportButton: {
-    backgroundColor: '#2196F3',
-  },
-  sosButton: {
-    backgroundColor: '#FF5252',
-  },
-  buttonText: {
-    color: 'white',
+  statusText: {
+    color: '#fff',
+    fontSize: 18,
     fontWeight: 'bold',
     marginTop: 5,
   },
+  
+  // Report button
+  reportButton: {
+    position: 'absolute',
+    bottom: 120, // Adjusted to avoid overlap with the bottom navigation
+    right: 20,
+    backgroundColor: '#333',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+  
+  // Bottom navigation
+  bottomNavContainer: {
+    position: 'absolute',
+    bottom: 25,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
   bottomNavigation: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: 'white',
-    padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+    borderRadius: 30,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '80%',
+    elevation: 8,
   },
   navButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 20,
   },
   activeNavButton: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#2196F3',
+    backgroundColor: '#333',
   },
+  sosButton: {
+    backgroundColor: '#FF5252',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 15,
+  },
+  
+  // Profile styles
   profileContainer: {
     flex: 1,
-    padding: 15,
+    backgroundColor: '#121212',
+    padding: 20,
   },
   profileHeader: {
     alignItems: 'center',
-    padding: 20,
+    marginVertical: 30,
   },
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#f0f0f0',
     marginTop: 10,
   },
   profileDetails: {
-    backgroundColor: 'white',
-    padding: 20,
+    backgroundColor: '#1e1e1e',
     borderRadius: 10,
+    padding: 20,
     marginTop: 20,
   },
   profileInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 15,
+    alignItems: 'center',
   },
   infoIcon: {
     marginRight: 15,
-    width: 20,
   },
   infoText: {
+    color: '#f0f0f0',
     fontSize: 16,
-    color: '#333',
   },
   editProfileButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#333',
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 10,
     alignItems: 'center',
     marginTop: 20,
   },
   editButtonText: {
-    color: 'white',
+    color: '#fff',
     fontWeight: 'bold',
   },
   logoutButton: {
-    backgroundColor: '#FF5252',
+    backgroundColor: '#444',
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 15,
   },
   logoutButtonText: {
-    color: 'white',
+    color: '#ff5252',
     fontWeight: 'bold',
   },
+  
+  // Form styles
   profileForm: {
-    backgroundColor: 'white',
-    padding: 20,
+    backgroundColor: '#1e1e1e',
     borderRadius: 10,
+    padding: 20,
     marginTop: 20,
   },
   formGroup: {
     marginBottom: 15,
   },
   formLabel: {
-    fontSize: 16,
-    marginBottom: 5,
-    color: '#333',
+    color: '#999',
+    marginBottom: 8,
   },
   formInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
+    backgroundColor: '#333',
+    color: '#f0f0f0',
     padding: 10,
+    borderRadius: 5,
     fontSize: 16,
   },
   formButtonGroup: {
@@ -522,19 +574,18 @@ const styles = StyleSheet.create({
   },
   formButton: {
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 10,
     alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 5,
+    width: '48%',
   },
   cancelButton: {
-    backgroundColor: '#9e9e9e',
+    backgroundColor: '#333',
   },
   saveButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#2196F3',
   },
   formButtonText: {
-    color: 'white',
+    color: '#fff',
     fontWeight: 'bold',
   },
-});
+};

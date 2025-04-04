@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, ActivityIndicator, StyleSheet } from 'react-native';
 import { router, useSegments } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { FIREBASE_AUTH } from '../FirebaseConfig';
+import { FIREBASE_AUTH } from '../../FirebaseConfig';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import * as AuthSession from 'expo-auth-session';
@@ -73,7 +73,7 @@ const LoginScreen = () => {
     <View style={styles.container}>
       <KeyboardAvoidingView behavior="padding" style={{ alignItems: 'center' }}>
         {/* App Logo */}
-        <Image source={require('../assets/images/logo.png')} style={styles.logo} />
+        <Image source={require('../../assets/images/logo.png')} style={styles.logo} />
 
         <Text style={styles.title}>Login</Text>
 
