@@ -1,50 +1,76 @@
-# Welcome to your Expo app 👋
+# Wildfire Alert App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native mobile application designed to provide real-time wildfire risk alerts to users based on temperature, humidity, and location data. Stay informed and safe with instant notifications and predictive insights.
+>This app is part of the [AI-based Wildfire Alert System](https://github.com/shadan-pk/AI-based-Wildfire-Alert-System.git) a comprehensive wildfire prediction and alert solution.
+---
 
-## Get started
+## 🚀 Features
 
-1. Install dependencies
+- 📱 User-friendly mobile interface built with React Native  
+- 📍 Live location tracking sent to the server for personalized alerts  
+- 🔔 Instant push notifications for high-risk wildfire zones  
+- 🌡️ Real-time display of temperature and humidity data  
+- 🔐 Secure user authentication via Firebase  
 
+---
+
+## 🧠 Tech Stack
+
+- **Framework**: React Native  
+- **Authentication**: Firebase Authentication  
+- **Backend Integration**: Communicates with a Node.js + Express server  
+- **Data Source**: Simulated server data and predictive alerts from LightGBM model  
+
+---
+
+## 📋 Prerequisites
+
+Before you begin, ensure you have the following installed:
+- [Node.js](https://nodejs.org/) (v16 or higher recommended)  
+- [npm](https://www.npmjs.com/) or [Yarn](https://yarnpkg.com/)  
+- [React Native Expo](https://docs.expo.dev/)
+- [Android Studio](https://developer.android.com/studio) (for Android)
+- A Firebase project set up (for authentication)  
+
+---
+
+## ⚙️ Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/shadan-pk/WildfireAlertApp.git
+   cd WildfireAlertApp
+   ```
+2. **Install dependencies**:
    ```bash
    npm install
    ```
+3.Set up Firebase:
+- Create a Firebase project at console.firebase.google.com.
+- Enable Authentication (e.g., Email/Password or Google Sign-In).
+- Download the google-services.json (Android) or GoogleService-Info.plist (iOS) file and place it in the appropriate directory (see Firebase docs).
+- Update the Firebase configuration in the app (e.g., in a firebaseConfig.js file).
 
-2. Start the app
-
+3. **Intall EXPO GO app on android**
+4. **Start EXPO Server**
    ```bash
-    npx expo start
+   npx expo start
    ```
+5.**scan the QR Code**
 
-In the output, you'll find options to open the app in a
+## 📡 Backend Integration
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+The app connects to a backend server (Node.js + Express) for:
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- Sending live user location data  
+- Receiving real-time temperature, humidity, and wildfire risk predictions  
 
-## Get a fresh project
+Ensure the backend server is running and the API endpoint is configured in the app (e.g., update the base URL in your API client).
 
-When you're ready, run:
+## License
 
-```bash
-npm run reset-project
-```
+MIT License
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Copyright (c) 2025 Shadan PK
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Permission is hereby granted, free of charge [LICENSE](LICENSE)
